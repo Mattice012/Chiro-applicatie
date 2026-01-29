@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profiel - Chiro Portaal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-[#0f111a] text-white">
+    <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none"></div>
+    <div id="sidebar-container"></div>
+    <div class="lg:ml-64 min-h-screen flex flex-col transition-all duration-500 relative z-10">
+        <div id="header-container"></div>
+        <main class="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full">
+            <div id="profile-content"></div>
+        </main>
+    </div>
+    <script src="js/config.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/profiel.js"></script>
+</body>
+</html>

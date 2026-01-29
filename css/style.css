@@ -1,0 +1,212 @@
+/* css/style.css */
+body { 
+    font-family: 'Inter', sans-serif; 
+    background-color: #0f111a; 
+    color: white; 
+    overflow-x: hidden; 
+    min-height: 100vh;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #181b25; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+/* Animaties (Pulse Slow) - CRUCIAAL VOOR DE LOOK */
+@keyframes pulse-slow { 
+    0%, 100% { opacity: 0.2; transform: scale(1) translate(0, 0); } 
+    50% { opacity: 0.4; transform: scale(1.1) translate(20px, -20px); } 
+}
+.animate-pulse-slow { animation: pulse-slow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate; }
+
+/* Utilities */
+.hidden-view { display: none !important; }
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+
+.loader {
+    border: 3px solid rgba(99, 102, 241, 0.3);
+    border-radius: 50%;
+    border-top: 3px solid #6366f1;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Glass Cards */
+.glass-card {
+    background: rgba(24, 27, 37, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+
+/* ... je bestaande css ... */
+
+/* Luxe Kaarten */
+.stat-card {
+    background: linear-gradient(145deg, #1f2330, #181b25);
+    border: 1px solid rgba(255,255,255,0.05);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+}
+.stat-card:hover { transform: translateY(-2px); border-color: rgba(99, 102, 241, 0.3); }
+
+/* Print Styling (High Contrast) */
+@media print {
+    body { background-color: white !important; color: black !important; }
+    #sidebar-container, #header-container, #toast-container, .no-print { display: none !important; }
+    .lg\:ml-64 { margin-left: 0 !important; }
+    #webshop-content { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+    
+    /* Maak kaarten wit met zwarte randen voor print */
+    .print-card {
+        background: white !important;
+        border: 2px solid #000 !important;
+        color: black !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+    .print-text-black { color: black !important; }
+    .print-border-black { border-color: black !important; }
+    
+    /* Verberg icons die niet printen */
+    .print-hidden { display: none !important; }
+    
+    /* Grid fix voor papier */
+    .print-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 1rem !important; }
+    .print-grid-4 { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 1rem !important; }
+}
+
+
+/* ... je bestaande css ... */
+
+/* KLAARZET KAARTEN (VISUAL UPDATE) */
+.ticket-card {
+    background-color: #181b25;
+    border: 1px solid #2a3040;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.ticket-card:hover {
+    border-color: #6366f1;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+/* De Badges (Het belangrijkste deel) */
+.item-badge {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.badge-wit { background-color: #f3f4f6; color: #111827; border: 1px solid #d1d5db; }
+.badge-bruin { background-color: #3f2e27; color: #e5e7eb; border: 1px solid #5d463d; }
+.badge-choco { background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.badge-jam { background-color: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+
+/* PRINT STIJLEN UPDATE */
+@media print {
+    .ticket-card {
+        background-color: white !important;
+        border: 2px solid #000 !important;
+        color: black !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+    .item-badge {
+        border: 1px solid #000 !important;
+        background-color: white !important;
+        color: black !important;
+    }
+    .badge-bruin {
+        background-color: #ddd !important; /* Lichtgrijs voor contrast op papier */
+    }
+}
+
+/* ... je bestaande css ... */
+
+/* KLAARZET KAARTEN (TICKET STYLE) */
+.ticket-card {
+    background-color: #181b25; /* Matcht met je donkere thema */
+    border: 1px solid #2a3040;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    height: 100%;
+}
+
+.ticket-card:hover {
+    border-color: #6366f1; /* Indigo highlight bij hover */
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -5px rgba(0,0,0,0.3);
+}
+
+/* De Badges: Dit maakt het overzichtelijk */
+.item-badge {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px; /* Iets groter voor leesbaarheid */
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: 1px solid transparent;
+}
+
+/* Specifieke kleuren per product */
+.badge-wit { 
+    background-color: #f3f4f6; 
+    color: #111827; 
+    border-color: #d1d5db; 
+}
+.badge-bruin { 
+    background-color: #3f2e27; 
+    color: #e5e7eb; 
+    border-color: #5d463d; 
+}
+.badge-choco { 
+    background-color: rgba(245, 158, 11, 0.1); 
+    color: #fbbf24; 
+    border-color: rgba(245, 158, 11, 0.2); 
+}
+.badge-jam { 
+    background-color: rgba(244, 63, 94, 0.1); 
+    color: #fb7185; 
+    border-color: rgba(244, 63, 94, 0.2); 
+}
+
+/* PRINT STIJLEN UPDATE */
+@media print {
+    .ticket-card {
+        background-color: white !important;
+        border: 2px solid #000 !important;
+        color: black !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+        margin-bottom: 1rem;
+    }
+    .item-badge {
+        border: 1px solid #ccc !important;
+        background-color: white !important;
+        color: black !important;
+    }
+    /* Zorg voor contrast op papier */
+    .badge-bruin { background-color: #eee !important; color: black !important; font-weight: bold; }
+    .badge-wit { font-weight: bold; }
+}

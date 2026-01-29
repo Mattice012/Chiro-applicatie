@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistieken - Chiro Portaal</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    
+    <style>
+        /* Modern Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+        /* Chart fix */
+        .chart-wrapper { position: relative; height: 350px; width: 100%; }
+
+        /* Print Reset */
+        @media print {
+            body { background: white !important; color: black !important; }
+            #sidebar-container, #header-container, .no-print { display: none !important; }
+            .lg\:ml-64 { margin-left: 0 !important; }
+            .bg-\[\#181b25\], .bg-\[\#1e232e\] { background: white !important; border: 1px solid #ddd !important; box-shadow: none !important; }
+            .text-white { color: black !important; }
+            /* Verberg de donkere boxjes bij printen voor inktbesparing */
+            .bg-\[\#151820\] { background: #f3f4f6 !important; color: black !important; border: 1px solid #ddd; }
+        }
+    </style>
+</head>
+<body class="bg-[#0f111a] text-white font-['Inter'] selection:bg-indigo-500/30">
+    
+    <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none"></div>
+    <div id="sidebar-container" class="no-print"></div>
+    
+    <div class="lg:ml-64 min-h-screen flex flex-col transition-all duration-500 relative z-10">
+        <div id="header-container" class="no-print"></div>
+        
+        <main class="flex-1 p-6 md:p-10 max-w-[1920px] mx-auto w-full">
+            
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+                <div>
+                    <h1 class="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+                        Statistieken
+                        <span class="px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-bold uppercase tracking-wider">Ledenanalyse</span>
+                    </h1>
+                    <p class="text-gray-400 text-sm mt-2">Diepgaand overzicht van aanwezigheden en trends.</p>
+                </div>
+                
+                <div class="flex gap-3 no-print">
+                    <button onclick="exportToCSV()" class="flex items-center gap-2 px-4 py-2 bg-[#181b25] hover:bg-[#202430] border border-gray-800 text-gray-300 hover:text-white text-xs font-bold rounded-lg transition-all">
+                        <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+                    </button>
+                    <button onclick="window.print()" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-indigo-500/20">
+                        <i data-lucide="printer" class="w-4 h-4"></i> Rapport
+                    </button>
+                </div>
+            </div>
+
+            <div id="stats-content" class="animate-in fade-in zoom-in duration-500 min-h-[400px]">
+                <div class="flex flex-col items-center justify-center h-64 text-gray-500">
+                    <div class="loader mb-4 border-indigo-500"></div> 
+                    <p class="text-sm font-medium animate-pulse">Data analyseren...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/statistieken.js"></script>
+</body>
+</html>
