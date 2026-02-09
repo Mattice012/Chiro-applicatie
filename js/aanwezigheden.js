@@ -156,9 +156,29 @@ async function saveAttendance() {
     else { showToast("Telling opgeslagen!", "success"); renderOverview(); }
 }
 
+// async function deleteAttendance(date) {
+//     if(confirm("Zeker weten?")) {
+//         const { error } = await supabaseClient.from(COLLECTION_NAMES.AANWEZIGHEDEN).delete().eq('datum', date);
+//         if(!error) { showToast("Verwijderd", "success"); renderOverview(); }
+//     }
+// }
+
+// Zoek de functie deleteAttendance en vervang deze:
+
 async function deleteAttendance(date) {
-    if(confirm("Zeker weten?")) {
+    // Gebruik de nieuwe mooie modal via window.askConfirmation
+    const confirmed = await window.askConfirmation(
+        "Telling verwijderen", 
+        `Ben je zeker dat je de telling van ${new Date(date).toLocaleDateString('nl-BE')} wilt wissen?`
+    );
+
+    if(confirmed) {
         const { error } = await supabaseClient.from(COLLECTION_NAMES.AANWEZIGHEDEN).delete().eq('datum', date);
-        if(!error) { showToast("Verwijderd", "success"); renderOverview(); }
+        if(!error) { 
+            showToast("Verwijderd", "success"); 
+            renderOverview(); 
+        } else {
+            showToast("Kon niet verwijderen", "error");
+        }
     }
 }

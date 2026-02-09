@@ -59,8 +59,29 @@ async function renderLayout() {
             </div>
         </header>`;
     }
+
+    // 3. Globale Modals Injecteren (NIEUW)
+    if (!document.getElementById('global-confirmation-modal')) {
+        const modalHTML = `
+        <div id="global-confirmation-modal" class="fixed inset-0 z-[150] hidden">
+            <div class="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"></div>
+            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-[#181b25] border border-gray-700 rounded-2xl shadow-2xl overflow-hidden p-6 text-center animate-in fade-in zoom-in duration-200">
+                <div class="w-16 h-16 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-500/20">
+                    <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-xl font-bold text-white mb-2" id="g-confirm-title">Bevestigen</h3>
+                <p class="text-gray-400 text-sm mb-6" id="g-confirm-message">Weet je het zeker?</p>
+                <div class="flex gap-3">
+                    <button id="g-confirm-no" class="flex-1 py-2.5 rounded-xl border border-gray-600 text-gray-300 hover:bg-gray-800 font-bold text-sm transition-colors">Nee</button>
+                    <button id="g-confirm-yes" class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm shadow-lg transition-all">Ja</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        lucide.createIcons(); // Zorg dat iconen werken in modal
+    }
     
-    // 3. Mobiele menu logica
+    // 4. Mobiele menu logica
     setTimeout(() => {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebar-overlay');
@@ -91,7 +112,6 @@ async function renderLayout() {
     updateUserDisplay();
 }
 
-// HIER GEBEURT HET: De link naar statistieken staat hier nu bij
 function renderNavLinks() {
     const container = document.getElementById('sidebar-nav');
     if(!container) return;
@@ -103,10 +123,7 @@ function renderNavLinks() {
         { href: 'aanwezigheden.html', icon: 'clipboard-list', label: 'Aanwezigheden' },
         { href: 'bestellingen.html', icon: 'shopping-bag', label: 'Webshop' },
         { href: 'financien.html', icon: 'wallet', label: 'Financiën' },
-        
-        // DEZE REGEL IS TOEGEVOEGD:
         { href: 'statistieken.html', icon: 'bar-chart-3', label: 'Statistieken' }, 
-        
         { href: 'profiel.html', icon: 'user', label: 'Mijn Profiel', spacer: true },
     ];
 
@@ -148,11 +165,7 @@ function updateUserDisplay() {
 }
 
 async function handleLogout() {
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) {
-        console.error('Logout error:', error);
-        alert('Fout bij uitloggen');
-    } else {
-        window.location.href = 'index.html';
-    }
-}   
+    localStorage.removeItem('chiro_last_active');
+    await supabaseClient.auth.signOut();
+    window.location.href = 'index.html';
+}
