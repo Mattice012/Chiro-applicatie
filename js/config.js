@@ -79,7 +79,9 @@
     // ================================================================
     // VERBETERDE AUTO-LOGOUT (WERKT OVER PAGINA'S HEEN)
     // ================================================================
-    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minuten
+    
+    // Verander de 5 naar 60 voor 1 uur, of 30 voor 30 minuten
+    const TIMEOUT_MS = 60 * 60 * 1000; // 60 minuten
 
     function startInactivityTimer() {
         // 1. Functie om de "laatst gezien" tijd te updaten in de browser opslag
