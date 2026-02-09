@@ -1,51 +1,90 @@
 <!DOCTYPE html>
 <html lang="nl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financiën - Chiro Portaal</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body class="bg-[#0f111a] text-white font-['Inter'] selection:bg-indigo-500/30">
-    
-    <div id="toast-container" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none"></div>
-    <div id="sidebar-container"></div>
-    
-    <div class="lg:ml-64 min-h-screen flex flex-col transition-all duration-500 relative z-10">
-        <div id="header-container"></div>
-        
-        <main class="flex-1 p-6 md:p-10 max-w-[1920px] mx-auto w-full">
-            <div class="flex flex-col md:flex-row justify-between items-end gap-4 mb-8">
-                <div>
-                    <h1 class="text-3xl font-extrabold text-white tracking-tight">Financiën</h1>
-                    <p class="text-gray-400 text-sm mt-1">Beheer de kas, inkomsten en uitgaven.</p>
-                </div>
-                
-                <div class="flex bg-[#181b25] p-1 rounded-xl border border-gray-800">
-                    <button onclick="switchTab('overview')" id="tab-overview" class="px-4 py-2 text-sm font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg">
-                        Overzicht
-                    </button>
-                    <button onclick="switchTab('add')" id="tab-add" class="px-4 py-2 text-sm font-bold rounded-lg text-gray-400 hover:text-white transition-all">
-                        <i data-lucide="plus-circle" class="inline w-4 h-4 mr-1"></i> Nieuwe Transactie
-                    </button>
-                </div>
-            </div>
 
-            <div id="fin-content" class="animate-in fade-in zoom-in duration-300">
-                <div class="flex justify-center p-20">
-                    <div class="loader border-indigo-500"></div>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    animation: { 'fade-in': 'fadeIn 0.3s ease-out' },
+                    keyframes: { fadeIn: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } } }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-[#0f111a] text-white font-sans antialiased selection:bg-indigo-500/30">
+
+    <div class="flex h-screen overflow-hidden">
+
+        <aside id="sidebar-container"
+            class="hidden md:flex w-64 flex-col fixed inset-y-0 z-50 bg-[#181b25] border-r border-gray-800 transition-transform duration-300">
+        </aside>
+
+        <main class="flex-1 flex flex-col md:pl-64 relative min-w-0 overflow-hidden">
+
+            <div id="mobile-header-container"></div>
+
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 relative">
+                <div class="max-w-7xl mx-auto space-y-8 pb-20">
+
+                    <div
+                        class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                        <div>
+                            <h1 class="text-3xl font-black tracking-tight text-white mb-1">Financiën</h1>
+                            <p class="text-gray-400 text-sm">Beheer inkomsten, uitgaven en afdelingsrekeningen.</p>
+                        </div>
+
+                        <div
+                            class="flex bg-[#181b25] p-1 rounded-xl border border-gray-800 overflow-x-auto max-w-full shadow-lg">
+                            <button onclick="switchTab('overview')" id="tab-overview"
+                                class="px-4 py-2 text-sm font-bold rounded-lg transition-all bg-indigo-600 text-white shadow-lg whitespace-nowrap flex items-center gap-2">
+                                Overzicht
+                            </button>
+                            <button onclick="switchTab('budgets')" id="tab-budgets"
+                                class="px-4 py-2 text-sm font-bold rounded-lg text-gray-400 hover:text-white transition-all whitespace-nowrap flex items-center gap-2">
+                                <i data-lucide="credit-card" class="w-4 h-4"></i> Virtuele Rekening
+                            </button>
+                            <button onclick="switchTab('add')" id="tab-add"
+                                class="px-4 py-2 text-sm font-bold rounded-lg text-gray-400 hover:text-white transition-all whitespace-nowrap flex items-center gap-2">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i> Transactie
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="fin-content" class="min-h-[400px]">
+                        <div class="flex justify-center items-center h-64">
+                            <div class="loader border-indigo-500"></div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </main>
     </div>
 
+    <div id="budget-modal" class="fixed inset-0 z-[100] hidden">
+    </div>
+
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[200] space-y-3"></div>
+
     <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
     <script src="js/layout.js"></script>
     <script src="js/financien.js"></script>
 </body>
+
 </html>

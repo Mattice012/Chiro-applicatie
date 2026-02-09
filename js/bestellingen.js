@@ -10,12 +10,11 @@ let webshopPrices = { whiteBread: 0.00, brownBread: 0.00, choco: 0.00, jam: 0.00
 // Kosten instellingen
 let costMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
 let costDate = ""; 
-let costViewMode = 'month'; // 'month' of 'day'
 
 // --- INITIALISATIE ---
 window.onload = async () => {
     try {
-        renderLayout();
+        if (typeof renderLayout === 'function') renderLayout();
         const user = await requireAuth();
         if(user) {
             webshopDate = getNextSunday();
@@ -48,17 +47,16 @@ async function fetchPricesAndStock() {
 
 // --- NAVIGATIE ---
 async function renderWebshop(subTab = 'order') {
-    const role = USER_ROLES[currentUser.role];
     const nav = document.getElementById('webshop-nav');
     const container = document.getElementById('webshop-content');
     
-    // Check permissies voor tabs (Instellingen & Financieel alleen voor Admin/Kassier/VB)
+    // Check permissies
     const isAdminOrKassier = ['ADMIN', 'KASSIER', 'VB'].includes(currentUser.role);
 
     const tabs = [
         { id: 'order', icon: 'shopping-cart', label: 'Bestellen' },
         { id: 'prep', icon: 'clipboard-list', label: 'Klaarzetten' },
-        ...(isAdminOrKassier ? [{ id: 'stock', icon: 'settings-2', label: 'Instellingen' }] : []),
+        ...(isAdminOrKassier ? [{ id: 'stock', icon: 'settings-2', label: 'Prijzen & Stock' }] : []),
         ...(isAdminOrKassier ? [{ id: 'costs', icon: 'pie-chart', label: 'Financieel' }] : [])
     ];
 
@@ -89,9 +87,7 @@ async function renderWebshop(subTab = 'order') {
 async function renderOrderView(container) {
     const { data } = await supabaseClient.from(COLLECTION_NAMES.BROOD_ORDERS).select('*').eq('date', webshopDate);
     webshopOrders = data || [];
-
-    // CHECK: Mag deze gebruiker bewerken?
-    const canEdit = ['ADMIN', 'KASSIER', 'VB'].includes(currentUser.role);
+    const canEdit = ['ADMIN', 'KASSIER', 'VB', 'KOOKOUDER'].includes(currentUser.role);
 
     const totals = webshopOrders.reduce((acc, o) => ({
         white: acc.white + (o.items.whiteBread||0), brown: acc.brown + (o.items.brownBread||0),
@@ -117,7 +113,6 @@ async function renderOrderView(container) {
         </tr>`;
     }).join('') : `<tr><td colspan="${canEdit ? 6 : 5}" class="px-6 py-16 text-center text-gray-500 italic">Geen bestellingen gevonden.<br>Sleep een CSV hierheen.</td></tr>`;
 
-    // Bouw Linkerkolom (Tools)
     let toolsHtml = `
         <div class="bg-[#181b25] border border-gray-800 rounded-2xl p-6 shadow-sm">
             <div class="flex justify-between items-center mb-2"><h3 class="font-bold text-white">Datum</h3><p class="text-gray-500 text-xs">Bestelling voor</p></div>
@@ -148,8 +143,6 @@ async function renderOrderView(container) {
             <button onclick="openEditModal('new')" class="w-full py-3.5 border border-gray-800 hover:bg-[#1f2330] text-gray-400 hover:text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"><i data-lucide="plus-circle" class="w-4 h-4"></i> Toevoegen</button>
             <button onclick="deleteAllOrders()" class="w-full py-3.5 border border-gray-800 hover:bg-rose-900/20 text-rose-500 hover:text-rose-400 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2"><i data-lucide="trash" class="w-4 h-4"></i> Alles Wissen</button>
         </div>`;
-    } else {
-        toolsHtml += `<div class="bg-[#181b25] border border-gray-800 rounded-2xl p-6 text-center"><div class="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-500"><i data-lucide="lock" class="w-5 h-5"></i></div><p class="text-gray-400 text-xs">Alleen leiding met de juiste rol kan wijzigen.</p></div>`;
     }
 
     container.innerHTML = `
@@ -176,14 +169,14 @@ async function renderOrderView(container) {
 }
 
 function renderMiniStat(label, value, classes) { return `<div class="rounded-xl p-3 flex flex-col items-center justify-center ${classes} shadow-sm transition-transform hover:-translate-y-1"><span class="text-2xl font-extrabold leading-none mb-1">${value}</span><span class="text-[10px] uppercase font-bold opacity-70">${label}</span></div>`; }
+
 // =============================================================================
-// VIEW 2: KLAARZETTEN (TICKET SYSTEEM) - HYBRIDE (Web mooi, Print strak)
+// VIEW 2: KLAARZETTEN (TICKET SYSTEEM)
 // =============================================================================
 async function renderPrepView(container) {
     const { data } = await supabaseClient.from(COLLECTION_NAMES.BROOD_ORDERS).select('*').eq('date', webshopDate);
     const orders = data || [];
     
-    // Totalen berekenen
     const sum = orders.reduce((acc, o) => {
         const i = o.items || {whiteBread:0, brownBread:0, choco:0, jam:0};
         return { white: acc.white+(i.whiteBread||0), brown: acc.brown+(i.brownBread||0), choco: acc.choco+(i.choco||0), jam: acc.jam+(i.jam||0) };
@@ -191,111 +184,27 @@ async function renderPrepView(container) {
 
     const copyText = `Bestelling Chiro ${new Date(webshopDate).toLocaleDateString('nl-BE')}:\n\n- ${sum.white}x Wit Brood\n- ${sum.brown}x Bruin Brood\n- ${sum.choco}x Choco\n- ${sum.jam}x Confituur`;
 
-    // --- SLIMME STIJLEN: ALLEEN ACTIEF BIJ PRINTEN ---
-    const printStyles = `
-    <style>
-        /* Verberg print-elementen op het scherm */
-        .only-print { display: none !important; }
-
-        @media print {
-            @page { size: landscape; margin: 10mm; }
-            
-            /* RESET NAAR WIT PAPIER */
-            body { background-color: white !important; color: black !important; -webkit-print-color-adjust: exact; }
-            .no-print { display: none !important; }
-            .only-print { display: flex !important; } /* Toon print-specifieke dingen */
-
-            /* LAYOUT RESET */
-            .print-container { width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
-            
-            /* HEADER STIJL (PRINT) */
-            .print-header-title { color: black !important; font-size: 24px !important; text-transform: uppercase; }
-            .print-header-sub { color: black !important; }
-
-            /* SAMENVATTING BALK (PRINT) */
-            .summary-bar { width: 100%; display: flex; gap: 10px; margin-bottom: 20px; border: 1px solid #000; padding: 10px; border-radius: 8px; background: #f0f0f0 !important; color: black !important; }
-            .summary-item { flex: 1; text-align: center; border-right: 1px solid #ccc; }
-            .summary-item:last-child { border-right: none; }
-            .summary-val { font-size: 22px; font-weight: 900; display: block; }
-            .summary-lbl { font-size: 10px; text-transform: uppercase; }
-
-            /* HET GRID */
-            .tickets-grid { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 15px !important; }
-
-            /* KAARTJES STIJL (PRINT OVERRIDES) */
-            .ticket-card { 
-                background: white !important; 
-                border: 2px dashed #666 !important; /* Snijlijntjes */
-                color: black !important;
-                box-shadow: none !important;
-                break-inside: avoid;
-                display: flex; flex-direction: column; justify-content: space-between;
-                height: 100%;
-            }
-
-            /* Header binnen kaartje */
-            .ticket-dept-title { 
-                color: white !important; 
-                background: black !important; /* Zwarte balk voor naam */
-                border: none !important;
-                text-align: center !important;
-                padding: 5px !important;
-                border-radius: 4px;
-                margin-bottom: 10px !important;
-                -webkit-print-color-adjust: exact;
-            }
-
-            /* Items */
-            .ticket-row { color: black !important; border-bottom: 1px dotted #ccc; padding-bottom: 2px; margin-bottom: 5px; }
-            .ticket-qty { color: black !important; font-size: 18px !important; font-weight: 900 !important; }
-            
-            /* Checkbox */
-            .print-checkbox { 
-                display: inline-block !important; 
-                width: 12px; height: 12px; 
-                border: 1px solid #000; 
-                margin-right: 8px; 
-                position: relative; top: 2px;
-            }
-
-            /* Opmerking */
-            .ticket-note { color: black !important; border-color: black !important; background: #eee !important; font-weight: bold; }
-            
-            /* Verberg lege tickets bij print */
-            .empty-ticket { display: none !important; }
-        }
-    </style>`;
-
     container.innerHTML = `
-    ${printStyles}
     <div class="max-w-[1600px] mx-auto animate-in fade-in zoom-in duration-300 print-container">
         
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 pb-6 gap-4 border-b border-gray-800 print:border-black">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 pb-6 gap-4 border-b border-gray-800 no-print">
             <div>
-                <h2 class="text-3xl font-extrabold text-white print-header-title">Klaarzetten</h2>
-                <p class="text-indigo-400 font-medium capitalize print-header-sub">${new Date(webshopDate).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                <h2 class="text-3xl font-extrabold text-white">Klaarzetten</h2>
+                <p class="text-indigo-400 font-medium capitalize">${new Date(webshopDate).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
             </div>
-            <div class="flex gap-2 no-print">
+            <div class="flex gap-2">
                 <button onclick="navigator.clipboard.writeText('${copyText}').then(()=>showToast('Gekopieerd!','success'))" class="bg-[#2a3040] hover:bg-[#32394d] text-white px-5 py-3 rounded-xl font-bold flex items-center shadow-lg border border-gray-700 transition-all"><i data-lucide="copy" class="w-5 h-5 mr-2"></i> Kopieer</button>
                 <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center shadow-lg hover:scale-105 transition-all"><i data-lucide="printer" class="w-5 h-5 mr-2"></i> Print Lijst</button>
             </div>
         </div>
         
-        <div class="mb-10">
-            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 ml-1 no-print">Aankoopsamenvatting</h3>
-            
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 no-print"> 
+        <div class="mb-10 no-print">
+            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 ml-1">Totaal Vandaag</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4"> 
                 ${renderBigCard('WIT BROOD', sum.white, '', 'bg-gray-100 text-black border-gray-300')}
                 ${renderBigCard('BRUIN BROOD', sum.brown, '', 'bg-[#3e342e] text-[#d6c0a8] border-[#5a4b42]')}
                 ${renderBigCard('CHOCO', sum.choco, '', 'bg-amber-900/40 text-amber-500 border-amber-500/30')}
                 ${renderBigCard('CONFITUUR', sum.jam, '', 'bg-rose-900/40 text-rose-500 border-rose-500/30')}
-            </div>
-
-            <div class="summary-bar only-print">
-                <div class="summary-item"><span class="summary-val">${sum.white}</span><span class="summary-lbl">Wit Brood</span></div>
-                <div class="summary-item"><span class="summary-val">${sum.brown}</span><span class="summary-lbl">Bruin Brood</span></div>
-                <div class="summary-item"><span class="summary-val">${sum.choco}</span><span class="summary-lbl">Choco</span></div>
-                <div class="summary-item"><span class="summary-val">${sum.jam}</span><span class="summary-lbl">Confituur</span></div>
             </div>
         </div>
 
@@ -303,48 +212,37 @@ async function renderPrepView(container) {
             ${orders.map(o => {
                 const i = o.items || {whiteBread:0, brownBread:0, choco:0, jam:0};
                 const isEmpty = (i.whiteBread+i.brownBread+i.choco+i.jam)===0;
-                
-                // Lege tickets: Zichtbaar op web (grijs), weg op print
-                if(isEmpty) return `
-                <div class="ticket-card empty-ticket p-5 opacity-30 border-dashed border-gray-700 rounded-xl border no-print">
-                    <h4 class="text-md font-bold text-gray-500 uppercase tracking-tight mb-2">${o.department}</h4>
-                    <div class="text-center py-6 text-xs text-gray-600 italic">Geen bestelling</div>
-                </div>`;
+                if(isEmpty) return '';
 
-                // Normale tickets: Webstijl classes + Print classes (via CSS)
                 return `
-                <div class="ticket-card bg-[#181b25] border border-gray-800 p-5 rounded-2xl relative overflow-hidden shadow-sm flex flex-col h-full">
-                    <div class="flex justify-between items-start mb-4 pl-1 header-row">
-                        <h4 class="ticket-dept-title text-lg font-black text-white uppercase tracking-tight truncate border-l-4 border-indigo-500 pl-3 w-full">${o.department}</h4>
+                <div class="ticket-card p-5 relative overflow-hidden flex flex-col h-full">
+                    <div class="flex justify-between items-start mb-4 pl-1">
+                        <h4 class="text-lg font-black text-white uppercase tracking-tight truncate border-l-4 border-indigo-500 pl-3 w-full print-text-black">${o.department}</h4>
                         ${o.note ? `<i data-lucide="message-square" class="w-5 h-5 text-indigo-400 no-print" title="${o.note}"></i>` : ''}
                     </div>
 
-                    <div class="space-y-1 flex-1">
-                        ${i.whiteBread > 0 ? `<div class="ticket-row flex justify-between items-center text-gray-300"><div><span class="print-checkbox only-print"></span><span>Wit Brood</span></div> <span class="ticket-qty text-xl font-black text-white">${i.whiteBread}</span></div>` : ''}
-                        ${i.brownBread > 0 ? `<div class="ticket-row flex justify-between items-center text-[#d6c0a8]"><div><span class="print-checkbox only-print"></span><span>Bruin Brood</span></div> <span class="ticket-qty text-xl font-black">${i.brownBread}</span></div>` : ''}
-                        
-                        ${(i.choco > 0 || i.jam > 0) && (i.whiteBread > 0 || i.brownBread > 0) ? '<div class="h-px bg-gray-700/50 my-2 print:my-1 print:bg-black"></div>' : ''}
-                        
-                        ${i.choco > 0 ? `<div class="ticket-row flex justify-between items-center text-amber-500"><div><span class="print-checkbox only-print"></span><span>Choco</span></div> <span class="ticket-qty text-xl font-black">${i.choco}</span></div>` : ''}
-                        ${i.jam > 0 ? `<div class="ticket-row flex justify-between items-center text-rose-500"><div><span class="print-checkbox only-print"></span><span>Confituur</span></div> <span class="ticket-qty text-xl font-black">${i.jam}</span></div>` : ''}
+                    <div class="space-y-2 flex-1">
+                        ${i.whiteBread > 0 ? `<div class="item-badge badge-wit"><span>Wit Brood</span> <span>${i.whiteBread}</span></div>` : ''}
+                        ${i.brownBread > 0 ? `<div class="item-badge badge-bruin"><span>Bruin Brood</span> <span>${i.brownBread}</span></div>` : ''}
+                        ${i.choco > 0 ? `<div class="item-badge badge-choco"><span>Choco</span> <span>${i.choco}</span></div>` : ''}
+                        ${i.jam > 0 ? `<div class="item-badge badge-jam"><span>Confituur</span> <span>${i.jam}</span></div>` : ''}
                     </div>
 
-                    ${o.note ? `<div class="ticket-note mt-4 pt-3 border-t border-dashed border-gray-700 text-xs italic text-gray-400">Opmerking: "${o.note}"</div>` : ''}
+                    ${o.note ? `<div class="mt-4 pt-3 border-t border-dashed border-gray-700 text-xs italic text-gray-400 print-text-black print-border-black">Opmerking: "${o.note}"</div>` : ''}
                 </div>`;
             }).join('')}
         </div>
     </div>`;
 }
 
-// Helper functie voor de grote kaarten (Web weergave)
 function renderBigCard(label, val, icon, classes) { 
     return `
     <div class="flex flex-col items-center justify-center p-6 rounded-2xl border ${classes} shadow-sm print-card">
-        <span class="text-3xl mb-2 print-hidden">${icon}</span>
         <span class="text-5xl font-black tracking-tighter">${val}</span>
         <span class="text-[11px] font-bold mt-2 opacity-70 uppercase tracking-widest">${label}</span>
     </div>`; 
 }
+
 // =============================================================================
 // VIEW 3: INSTELLINGEN
 // =============================================================================
@@ -354,7 +252,7 @@ async function renderStockView(container) {
         <h2 class="text-2xl font-bold text-white mb-6">Instellingen</h2>
         <form onsubmit="saveStockAndPrices(event)" class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="bg-[#181b25] border border-gray-800 rounded-2xl p-6 shadow-md">
-                <h3 class="text-indigo-400 font-bold mb-4 uppercase text-xs tracking-wider flex items-center"><i data-lucide="tag" class="w-4 h-4 mr-2"></i> Prijzen (€)</h3>
+                <h3 class="text-indigo-400 font-bold mb-4 uppercase text-xs tracking-wider flex items-center"><i data-lucide="tag" class="w-4 h-4 mr-2"></i> Prijzen per stuk (€)</h3>
                 <div class="space-y-4">
                     ${renderInputRow('Wit Brood', 'price-white', webshopPrices.whiteBread, '€')}
                     ${renderInputRow('Bruin Brood', 'price-brown', webshopPrices.brownBread, '€')}
@@ -386,70 +284,80 @@ async function saveStockAndPrices(e) {
 }
 
 // =============================================================================
-// VIEW 4: KOSTEN & SYNC (VIEW SWITCHER)
+// VIEW 4: KOSTEN & SYNC (VERBETERDE PROFESSIONELE VERSIE)
 // =============================================================================
 async function renderCostsView(container) {
-    let query = supabaseClient.from(COLLECTION_NAMES.BROOD_ORDERS).select('*');
-    let titleDate = "";
+    // 1. Data ophalen
+    const start = `${costMonth}-01`;
+    const [y, m] = costMonth.split('-').map(Number);
+    const end = new Date(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1).toISOString().split('T')[0];
+    const titleDate = new Date(start).toLocaleDateString('nl-BE', { month: 'long', year: 'numeric' });
+    const descriptionKey = `Webshop Afrekening ${titleDate}`; 
 
-    if (costViewMode === 'month') {
-        const start = `${costMonth}-01`;
-        const [y, m] = costMonth.split('-').map(Number);
-        const end = new Date(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1).toISOString().split('T')[0];
-        query = query.gte('date', start).lt('date', end).order('date', {ascending: true});
-        titleDate = new Date(start).toLocaleDateString('nl-BE', { month: 'long', year: 'numeric' });
-    } else {
-        query = query.eq('date', costDate);
-        titleDate = new Date(costDate).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
-    }
+    const { data: orders } = await supabaseClient.from(COLLECTION_NAMES.BROOD_ORDERS).select('*').gte('date', start).lt('date', end);
+    const { data: existingTransactions } = await supabaseClient.from(COLLECTION_NAMES.FINANCES).select('*').eq('description', descriptionKey);
 
-    const { data } = await query;
     const grouped = {};
     let grandTotal = 0;
 
-    if(data) {
-        data.forEach(o => {
+    if(orders) {
+        orders.forEach(o => {
             const normalizedDept = normalizeDepartment(o.department);
-            if(!grouped[normalizedDept]) grouped[normalizedDept] = { orders: [], total: 0 };
+            if(!grouped[normalizedDept]) grouped[normalizedDept] = { orders: [], total: 0, hasSync: false };
+            
             const i = o.items || {whiteBread:0, brownBread:0, choco:0, jam:0};
             const cost = (i.whiteBread * webshopPrices.whiteBread) + (i.brownBread * webshopPrices.brownBread) + (i.choco * webshopPrices.choco) + (i.jam * webshopPrices.jam);
+            
             grouped[normalizedDept].total += cost;
-            grandTotal += cost;
             grouped[normalizedDept].orders.push({ date: o.date, cost: cost, items: i });
+            grandTotal += cost;
         });
     }
+
+    // Check status per afdeling (kijk of 'afdelingen' array of 'afdeling' string matcht)
+    Object.keys(grouped).forEach(dept => {
+        const trans = existingTransactions.find(t => 
+            (t.afdeling === dept || (Array.isArray(t.afdelingen) && t.afdelingen.includes(dept))) && 
+            t.type === 'expense'
+        );
+        if(trans) {
+            grouped[dept].hasSync = true;
+            grouped[dept].syncDiff = Math.abs(trans.amount - grouped[dept].total) > 0.05; 
+        }
+    });
 
     const sortedDepts = Object.keys(grouped).sort();
     let contentHtml = '';
 
     if (sortedDepts.length === 0) {
-        contentHtml = '<div class="p-10 text-center text-gray-500 border border-gray-800 rounded-xl bg-[#181b25]">Geen bestellingen gevonden.</div>';
-    } else if (costViewMode === 'month') {
+        contentHtml = '<div class="p-10 text-center text-gray-500 border border-gray-800 rounded-xl bg-[#181b25]">Geen bestellingen in deze maand.</div>';
+    } else {
         sortedDepts.forEach(dept => {
             const g = grouped[dept];
+            let statusBadge = `<span class="text-xs text-amber-500 flex items-center gap-1 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20"><i data-lucide="circle-dashed" class="w-3 h-3"></i> Nog niet verrekend</span>`;
+            if(g.hasSync && g.syncDiff) statusBadge = `<span class="text-xs text-orange-500 flex items-center gap-1 bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20"><i data-lucide="alert-circle" class="w-3 h-3"></i> Bedrag gewijzigd! (Sync opnieuw)</span>`;
+            else if(g.hasSync) statusBadge = `<span class="text-xs text-emerald-500 flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20"><i data-lucide="check-circle-2" class="w-3 h-3"></i> Verrekend</span>`;
+
             const detailRows = g.orders.map(o => `
                 <div class="flex justify-between items-center text-xs text-gray-400 py-2 border-b border-gray-800/50 last:border-0 hover:bg-[#1f2330] px-2 rounded">
                     <span class="font-mono text-gray-300 w-24">${new Date(o.date).toLocaleDateString('nl-BE')}</span>
                     <span class="flex-1 truncate">${o.items.whiteBread}W, ${o.items.brownBread}B, ${o.items.choco}C, ${o.items.jam}J</span>
-                    <span class="font-mono text-rose-400">€ -${o.cost.toFixed(2)}</span>
+                    <span class="font-mono text-rose-400">€ ${o.cost.toFixed(2)}</span>
                 </div>`).join('');
 
             contentHtml += `
             <details class="bg-[#181b25] border border-gray-800 rounded-xl overflow-hidden group mb-3 shadow-sm">
-                <summary class="flex justify-between items-center p-4 cursor-pointer bg-[#1f2330] hover:bg-[#2a3040] transition-colors select-none">
-                    <div class="flex items-center gap-3"><i data-lucide="chevron-right" class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-90"></i><span class="font-bold text-white">${dept}</span></div>
-                    <span class="font-mono font-bold text-rose-400">€ -${g.total.toFixed(2)}</span>
+                <summary class="flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 cursor-pointer bg-[#1f2330] hover:bg-[#2a3040] transition-colors select-none gap-2">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-gray-500 transition-transform group-open:rotate-90"></i>
+                        <span class="font-bold text-white">${dept}</span>
+                        ${statusBadge}
+                    </div>
+                    <span class="font-mono font-bold text-rose-400 pl-7 sm:pl-0">€ ${g.total.toFixed(2)}</span>
                 </summary>
                 <div class="p-4 bg-[#181b25] border-t border-gray-800 space-y-1"><div class="text-[10px] uppercase font-bold text-gray-600 mb-2 pl-2">Details</div>${detailRows}</div>
             </details>`;
         });
-    } else {
-        const tableRows = sortedDepts.map(dept => {
-            const g = grouped[dept];
-            const i = g.orders.reduce((acc, o) => ({ w: acc.w+o.items.whiteBread, b: acc.b+o.items.brownBread, c: acc.c+o.items.choco, j: acc.j+o.items.jam }), {w:0,b:0,c:0,j:0});
-            return `<tr class="border-b border-gray-800/50 hover:bg-[#1f2330]"><td class="p-3 text-white font-bold">${dept}</td><td class="p-3 text-center text-gray-400 text-xs">${i.w}W, ${i.b}B, ${i.c}C, ${i.j}J</td><td class="p-3 text-right font-mono text-rose-400 font-bold">€ -${g.total.toFixed(2)}</td></tr>`;
-        }).join('');
-        contentHtml = `<div class="bg-[#181b25] border border-gray-800 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead class="bg-[#1f2330] text-xs font-bold text-gray-500 text-left"><tr><th class="p-3">Afdeling</th><th class="p-3 text-center">Items</th><th class="p-3 text-right">Kost</th></tr></thead><tbody>${tableRows}</tbody></table></div>`;
     }
 
     container.innerHTML = `
@@ -457,75 +365,102 @@ async function renderCostsView(container) {
         <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
             <div>
                 <h2 class="text-2xl font-bold text-white">Financieel Overzicht</h2>
-                <div class="flex items-center gap-2 mt-1">
-                    <div class="flex bg-[#181b25] p-1 rounded-lg border border-gray-700">
-                        <button onclick="costViewMode='month'; renderWebshop('costs')" class="px-3 py-1 text-xs font-bold rounded-md transition-all ${costViewMode==='month' ? 'bg-[#2a3040] text-white shadow' : 'text-gray-500 hover:text-white'}">Maand</button>
-                        <button onclick="costViewMode='day'; renderWebshop('costs')" class="px-3 py-1 text-xs font-bold rounded-md transition-all ${costViewMode==='day' ? 'bg-[#2a3040] text-white shadow' : 'text-gray-500 hover:text-white'}">Dag</button>
-                    </div>
-                    <span class="text-sm text-gray-400 ml-2 capitalize">${titleDate}</span>
-                </div>
+                <p class="text-sm text-gray-400 mt-1">Automatische doorrekening naar virtuele rekeningen.</p>
             </div>
             
             <div class="flex gap-3">
-                ${costViewMode === 'month' 
-                    ? `<input type="month" value="${costMonth}" onchange="costMonth=this.value; renderWebshop('costs')" class="bg-[#181b25] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500">`
-                    : `<input type="date" value="${costDate}" onchange="costDate=this.value; renderWebshop('costs')" class="bg-[#181b25] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500">`
-                }
-                ${costViewMode === 'month' 
-                    ? `<button id="sync-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center shadow-lg"><i data-lucide="arrow-left-right" class="w-4 h-4 mr-2"></i> Verrekenen</button>`
-                    : `<span class="text-xs text-gray-500 italic self-center">Verrekenen enkel per maand</span>`
-                }
+                <input type="month" value="${costMonth}" onchange="costMonth=this.value; renderWebshop('costs')" class="bg-[#181b25] border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 shadow-sm">
+                <button id="sync-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg text-sm font-bold flex items-center shadow-lg transition-transform active:scale-95">
+                    <i data-lucide="arrow-left-right" class="w-4 h-4 mr-2"></i> Verrekenen naar Financiën
+                </button>
             </div>
         </div>
 
-        <div class="bg-[#181b25] border border-gray-800 rounded-2xl p-6 mb-8 flex justify-between items-center shadow-lg">
-            <span class="text-gray-400 font-bold uppercase text-xs tracking-widest">Totaal Selectie</span><span class="text-3xl font-black text-rose-400">€ -${grandTotal.toFixed(2)}</span>
+        <div class="bg-[#181b25] border border-gray-800 rounded-2xl p-6 mb-8 flex justify-between items-center shadow-lg bg-gradient-to-r from-[#181b25] to-[#1f2330]">
+            <div>
+                <span class="text-gray-400 font-bold uppercase text-xs tracking-widest block mb-1">Totaal Webshop Kost</span>
+                <span class="text-xs text-gray-500">${titleDate}</span>
+            </div>
+            <span class="text-4xl font-black text-rose-400 tracking-tight">€ ${grandTotal.toFixed(2)}</span>
         </div>
         
         <div class="space-y-2">${contentHtml}</div>
-        
-        <div class="mt-8 text-center"><button onclick="exportCostsCSV('${costViewMode}')" class="text-gray-500 hover:text-white text-sm underline">Download CSV Export</button></div>
     </div>`;
     
-    if(document.getElementById('sync-btn')) document.getElementById('sync-btn').onclick = () => syncCostsToFinances(grouped);
+    if(document.getElementById('sync-btn')) {
+        document.getElementById('sync-btn').onclick = () => syncCostsToFinances(grouped, descriptionKey);
+    }
 }
 
 // --- SYNC FUNCTIE (SMART UPDATE) ---
-async function syncCostsToFinances(groupedData) {
-    if(!await askConfirmation(`Wil je de kosten van ${Object.keys(groupedData).length} afdelingen synchroniseren met het kasboek voor ${costMonth}?`)) return;
+async function syncCostsToFinances(groupedData, description) {
+    if(!await askConfirmation(`Wil je de kosten van ${Object.keys(groupedData).length} afdelingen synchroniseren met het kasboek?`)) return;
 
-    let inserted = 0; let updated = 0;
-    const monthName = new Date(`${costMonth}-01`).toLocaleDateString('nl-BE', { month: 'long' });
-    const description = `Webshop Afrekening ${monthName}`;
+    const btn = document.getElementById('sync-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="loader w-4 h-4 border-white mr-2"></div> Bezig...`;
 
-    for (const [dept, data] of Object.entries(groupedData)) {
-        if (data.total > 0) {
-            const { data: existing } = await supabaseClient.from(COLLECTION_NAMES.FINANCES).select('*').eq('afdeling', dept).eq('description', description).eq('type', 'expense').maybeSingle();
+    let stats = { inserted: 0, updated: 0, skipped: 0 };
+
+    try {
+        for (const [dept, data] of Object.entries(groupedData)) {
+            // Check of er al een transactie is voor deze maand & afdeling
+            // We checken zowel op 'afdeling' (oude string) als 'afdelingen' (nieuwe array check is lastig in Supabase zonder contains)
+            // Maar we gebruiken description als unieke key per maand, dus dat is veilig.
+            const { data: existing } = await supabaseClient
+                .from(COLLECTION_NAMES.FINANCES)
+                .select('*')
+                .eq('afdeling', dept)
+                .eq('description', description)
+                .eq('type', 'expense')
+                .maybeSingle();
+
+            if (data.total <= 0.01) {
+                stats.skipped++;
+                continue;
+            }
 
             if (existing) {
+                // Update
                 if (Math.abs(existing.amount - data.total) > 0.01) {
-                    await supabaseClient.from(COLLECTION_NAMES.FINANCES).update({ amount: data.total, user: currentUser.name }).eq('id', existing.id);
-                    updated++;
+                    await supabaseClient.from(COLLECTION_NAMES.FINANCES)
+                        .update({ 
+                            amount: data.total, 
+                            user: currentUser.name,
+                            afdelingen: [dept] // Zorg dat array up-to-date is
+                        }) 
+                        .eq('id', existing.id);
+                    stats.updated++;
+                } else {
+                    stats.skipped++;
                 }
             } else {
+                // Nieuw - HIER ZAT DE FOUT: we moeten 'afdelingen' (array) vullen!
                 await supabaseClient.from(COLLECTION_NAMES.FINANCES).insert({
-                    description: description, amount: data.total, type: 'expense', category: 'Webshop',
-                    afdeling: dept, user: currentUser.name, created_at: new Date().toISOString()
+                    description: description,
+                    amount: data.total,
+                    type: 'expense',
+                    category: 'Webshop',
+                    afdeling: dept,     // String (voor backward compatibility)
+                    afdelingen: [dept], // Array (BELANGRIJK VOOR VIRTUELE REKENING)
+                    datum: new Date().toISOString().split('T')[0],
+                    user: currentUser.name
                 });
-                inserted++;
+                stats.inserted++;
             }
         }
+        showToast(`Sync klaar: ${stats.inserted} nieuw, ${stats.updated} aangepast.`, "success");
+        renderWebshop('costs');
+    } catch (err) {
+        console.error(err);
+        showToast("Er ging iets mis bij het synchroniseren.", "error");
+    } finally {
+        if(btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="arrow-left-right" class="w-4 h-4 mr-2"></i> Verrekenen naar Financiën`;
+            lucide.createIcons();
+        }
     }
-    if (inserted === 0 && updated === 0) showToast("Alles was al up-to-date.", "info");
-    else showToast(`${inserted} nieuw, ${updated} geüpdatet!`, "success");
-}
-
-function exportCostsCSV(mode) {
-    if(mode !== 'month') { alert("Exporteren kan voorlopig alleen in maandoverzicht."); return; }
-    
-    // Trigger render om data op te halen (snel trucje, beter is data cachen)
-    // Voor nu alert omdat de data in de render-functie zit
-    alert("Gebruik de 'Maand' weergave om de maand CSV te downloaden.");
 }
 
 // =============================================================================
@@ -535,18 +470,13 @@ function normalizeDepartment(rawName) {
     if (!rawName) return "Onbekend";
     const clean = rawName.trim();
     const mapping = { 
-        "Tip10's": "Tiptiens", 
+        "Tip10's": "Tiptiens", "Tip10s": "Tiptiens",
         "Aspi's": "Aspis", "Aspis": "Aspis",
-        "Speelclub meisjes": "Speelclub Meisjes", "Speelclub Meisjes": "Speelclub Meisjes",
-        "Speelclub jongens": "Speelclub Jongens", "Speelclub Jongens": "Speelclub Jongens",
-        "Kerels": "Kerels", 
-        "Tippers": "Tippers", 
-        "Toppers": "Toppers", 
-        "Rakkers": "Rakkers", 
-        "Kwiks": "Kwiks", 
-        "Sloebers": "Sloebers"
+        "Speelclub meisjes": "Speelclub Meisjes", "Speelclub jongens": "Speelclub Jongens",
+        "Kerels": "Kerels", "Tippers": "Tippers", "Toppers": "Toppers", "Rakkers": "Rakkers", "Kwiks": "Kwiks", "Sloebers": "Sloebers"
     };
-    return mapping[clean] || mapping[clean.toLowerCase()] || clean;
+    const found = Object.keys(mapping).find(k => k.toLowerCase() === clean.toLowerCase());
+    return found ? mapping[found] : clean;
 }
 
 function askConfirmation(message) {
@@ -555,18 +485,10 @@ function askConfirmation(message) {
         const msg = document.getElementById('confirm-message');
         const yesBtn = document.getElementById('confirm-yes-btn');
         const noBtn = document.getElementById('confirm-cancel-btn');
-        
         if(!modal) return resolve(confirm(message));
-
         msg.innerText = message;
         modal.classList.remove('hidden');
-
-        const close = (result) => {
-            modal.classList.add('hidden');
-            yesBtn.onclick = null;
-            noBtn.onclick = null;
-            resolve(result);
-        };
+        const close = (result) => { modal.classList.add('hidden'); yesBtn.onclick = null; noBtn.onclick = null; resolve(result); };
         yesBtn.onclick = () => close(true);
         noBtn.onclick = () => close(false);
     });
@@ -629,45 +551,16 @@ function processFile(file) {
         const text = e.target.result;
         const rows = text.split('\n');
         pendingImport = [];
-        
         for (let i = 1; i < rows.length; i++) {
-            const row = rows[i].trim();
-            if(!row) continue;
-            
-            // CSV Parser die rekening houdt met quotes en lege velden
-            const cols = [];
-            let current = '';
-            let inQuote = false;
-            
-            for(let j=0; j<row.length; j++) {
-                const char = row[j];
-                if(char === '"') {
-                    inQuote = !inQuote;
-                } else if(char === ',' && !inQuote) {
-                    cols.push(current.trim());
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
+            const row = rows[i].trim(); if(!row) continue;
+            const cols = []; let current = ''; let inQuote = false;
+            for(let j=0; j<row.length; j++) { const char = row[j]; if(char === '"') inQuote = !inQuote; else if(char === ',' && !inQuote) { cols.push(current.trim()); current = ''; } else current += char; }
             cols.push(current.trim());
             const cleanCols = cols.map(c => c.replace(/^"|"$/g, '').trim());
-
-            // Index check: 2=Ja/Nee, 3=Afdeling, 4=Bruin, 5=Wit, 6=Choco, 7=Jam, 8=Opmerking
             if (cleanCols.length < 5) continue;
-            
             if (cleanCols[2]?.toLowerCase() === 'ja') {
                 const dept = normalizeDepartment(cleanCols[3]);
-                pendingImport.push({ 
-                    department: dept, 
-                    items: { 
-                        brownBread: parseInt(cleanCols[4])||0, 
-                        whiteBread: parseInt(cleanCols[5])||0, 
-                        choco: parseInt(cleanCols[6])||0, 
-                        jam: parseInt(cleanCols[7])||0 
-                    }, 
-                    note: cleanCols[8] || '' 
-                });
+                pendingImport.push({ department: dept, items: { brownBread: parseInt(cleanCols[4])||0, whiteBread: parseInt(cleanCols[5])||0, choco: parseInt(cleanCols[6])||0, jam: parseInt(cleanCols[7])||0 }, note: cleanCols[8] || '' });
             }
         }
         showPreviewUI();

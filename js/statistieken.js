@@ -1,7 +1,6 @@
 // js/statistieken.js
 
 // --- CONFIGURATIE ---
-// Alleen de basiskleur per afdeling. De rest wordt dynamisch gegenereerd.
 const DEPT_STYLE = {
     "Sloebers":          { color: "purple" },
     "Speelclub Jongens": { color: "yellow" },
@@ -26,20 +25,28 @@ window.onload = async () => {
     } catch (error) { console.error("Error:", error); }
 };
 
-// --- SLIMME NAAMSHERKENNER ---
-// Zorgt dat data van 'Tip10s', 'Tiptiens' en 'tiptien' correct wordt samengevoegd
+// --- HELPERS ---
 function resolveDeptName(dbName, validNames) {
     if (!dbName) return null;
     const cleanDb = dbName.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-    
     for (const validName of validNames) {
         const cleanValid = validName.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (cleanDb === cleanValid) return validName;
-        // Specifieke fix voor de tiptiens variaties
         if ((cleanValid.includes('tiptien') && cleanDb.includes('tip10')) || 
             (cleanValid.includes('tip10') && cleanDb.includes('tiptien'))) return validName;
     }
     return null;
+}
+
+// FIX: Bereken start van het werkjaar (1 september)
+function getStartOfChiroYear() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11, dus 8 is september
+    
+    // Als we voor september zijn (jan-aug), is de start vorig jaar september
+    const startYear = currentMonth < 8 ? currentYear - 1 : currentYear;
+    return `${startYear}-09-01`;
 }
 
 // --- HOOFDFUNCTIE ---
@@ -47,15 +54,18 @@ async function renderStatistics() {
     const container = document.getElementById('stats-content');
     
     try {
-        // 1. DATA OPHALEN
+        // 1. DATA OPHALEN (Gefilterd op werkjaar)
+        const startDate = getStartOfChiroYear();
+        
         const { data: records, error } = await supabaseClient
             .from(COLLECTION_NAMES.AANWEZIGHEDEN)
             .select('*')
+            .gte('datum', startDate) // FIX: Alleen data van dit seizoen
             .order('datum', { ascending: true });
 
         if (error) throw error;
         if (!records || records.length === 0) {
-            container.innerHTML = `<div class="p-10 text-center text-gray-500 bg-[#181b25] border border-gray-800 rounded-2xl">Geen data beschikbaar.</div>`;
+            container.innerHTML = `<div class="p-10 text-center text-gray-500 bg-[#181b25] border border-gray-800 rounded-2xl">Geen data beschikbaar voor dit werkjaar (vanaf ${startDate}).</div>`;
             return;
         }
 
@@ -64,7 +74,6 @@ async function renderStatistics() {
         let deptStats = {};
         const configNames = AFDELINGEN_CONFIG.map(c => c.naam);
         
-        // Initialiseren
         AFDELINGEN_CONFIG.forEach(c => {
             deptStats[c.naam] = { total: 0, count: 0, max: 0, min: 999, last: 0, prev: 0 };
         });
@@ -95,17 +104,14 @@ async function renderStatistics() {
                 }
             });
 
-            // Gebruik berekend totaal (correcter door name-fix) of fallback
             const finalCount = berekendTotaal > 0 ? berekendTotaal : (parseInt(dag.totaalAantal) || 0);
             historyData.push({ date: dag.datum, count: finalCount, details: dag.opmerking });
         });
 
         globalExportData = historyData;
 
-        // Minima fixen (als nog 999, dan 0)
         for (const key in deptStats) { if(deptStats[key].min === 999) deptStats[key].min = 0; }
 
-        // Totalen
         const totalDays = historyData.length;
         const totalAtt = historyData.reduce((a,b) => a + b.count, 0);
         const avgAtt = totalDays > 0 ? (totalAtt / totalDays).toFixed(0) : 0;
@@ -119,13 +125,13 @@ async function renderStatistics() {
                 ${renderKpiCard('Gem. Opkomst', avgAtt, 'leden per zondag', 'users', 'text-indigo-400', 'bg-indigo-500/10')}
                 ${renderKpiCard('Record', maxAtt, 'hoogste opkomst', 'trophy', 'text-amber-400', 'bg-amber-500/10')}
                 ${renderKpiCard('Dagen', totalDays, 'zondagen geteld', 'calendar', 'text-emerald-400', 'bg-emerald-500/10')}
-                ${renderKpiCard('Totaal Aanwezigheden', totalAtt.toLocaleString('nl-BE'), 'dit werkjaar', 'chart-bar', 'text-rose-400', 'bg-rose-500/10')}
+                ${renderKpiCard('Totaal', totalAtt.toLocaleString('nl-BE'), `sinds ${new Date(startDate).toLocaleDateString('nl-BE', {month:'short'})}`, 'chart-bar', 'text-rose-400', 'bg-rose-500/10')}
             </div>
 
             <div>
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="text-lg font-bold text-white">Details per Afdeling</h3>
-                    <span class="text-xs text-gray-500">Live overzicht</span>
+                    <span class="text-xs text-gray-500">Huidig werkjaar</span>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -137,7 +143,6 @@ async function renderStatistics() {
                             const styleConfig = DEPT_STYLE[conf.naam] || { color: "gray" };
                             const color = styleConfig.color;
                             
-                            // Trend berekening
                             const diff = s.last - s.prev;
                             let diffIcon = "minus";
                             let diffColor = "text-gray-500";
@@ -146,7 +151,6 @@ async function renderStatistics() {
                             if (diff > 0) { diffIcon = "trending-up"; diffColor = "text-emerald-400"; diffVal = `+${diff}`; } 
                             else if (diff < 0) { diffIcon = "trending-down"; diffColor = "text-rose-400"; diffVal = `${diff}`; }
 
-                            // CARD DESIGN
                             return `
                             <div class="bg-[#1e232e] rounded-xl overflow-hidden shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all duration-300 group flex flex-col h-full border border-gray-800/50">
                                 
@@ -235,9 +239,6 @@ async function renderStatistics() {
     }
 }
 
-// --- HELPER FUNCTIES ---
-
-// KPI CARD (Met iconen zoals gevraagd)
 function renderKpiCard(title, value, sub, icon, textColor, bgClass) {
     return `
     <div class="bg-[#181b25] border border-gray-800 p-6 rounded-2xl shadow-sm flex items-start justify-between hover:border-gray-700 transition-colors">
