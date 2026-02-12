@@ -3,7 +3,7 @@
 // --- GLOBALE VARIABELEN ---
 let webshopDate = "";
 let webshopOrders = [];
-let pendingImports = []; // Tijdelijke opslag voor CSV + Manueel in preview
+let pendingImports = [];
 let webshopStock = { choco: 0, jam: 0 };
 let webshopPrices = { whiteBread: 0.00, brownBread: 0.00, choco: 0.00, jam: 0.00 };
 let costMonth = new Date().toISOString().slice(0, 7);
@@ -44,7 +44,6 @@ async function fetchPricesAndStock() {
 
 // --- NAVIGATIE ---
 async function renderWebshop(subTab = 'order') {
-    // Reset preview mode bij tab wissel
     document.getElementById('csv-preview-container').classList.add('hidden');
     document.getElementById('webshop-content').classList.remove('hidden');
     pendingImports = [];
@@ -140,7 +139,7 @@ async function renderOrderView(container) {
 }
 
 // =============================================================================
-// NIEUW: CSV IMPORT PREVIEW & EDIT LOGICA
+// CSV IMPORT PREVIEW & EDIT LOGICA
 // =============================================================================
 async function handleCSVUpload(input) {
     if (!input.files || !input.files[0]) return;
@@ -155,7 +154,6 @@ async function handleCSVUpload(input) {
                 
                 for (const row of results.data) {
                     const keys = Object.keys(row);
-                    // Slim zoeken naar kolommen
                     const colDept = keys.find(k => k.toLowerCase().includes('afdeling'));
                     const colWit = keys.find(k => k.toLowerCase().includes('witte broden'));
                     const colBruin = keys.find(k => k.toLowerCase().includes('bruine broden'));
@@ -171,14 +169,12 @@ async function handleCSVUpload(input) {
                             choco: parseInt(row[colChoco]) || 0,
                             jam: parseInt(row[colConf]) || 0
                         };
-                        // Alleen toevoegen als er iets in zit
                         if (items.whiteBread + items.brownBread + items.choco + items.jam > 0) {
                             pendingImports.push({ department: dept, items: items });
                         }
                     }
                 }
                 
-                // Ook als CSV leeg lijkt (geen geldige orders), tonen we preview zodat manueel toevoegen kan
                 renderPreviewMode();
                 if (pendingImports.length === 0) showToast("CSV leek leeg, je kunt manueel toevoegen.", "warning");
                 
@@ -192,7 +188,6 @@ async function handleCSVUpload(input) {
 }
 
 function renderPreviewMode() {
-    // Wissel views
     document.getElementById('webshop-content').classList.add('hidden');
     document.getElementById('csv-preview-container').classList.remove('hidden');
 
@@ -236,7 +231,6 @@ function cancelImport() {
 async function commitImport() {
     if (pendingImports.length === 0) { showToast("Niets om op te slaan.", "warning"); return; }
     
-    // Sla alle pending items op in de DB
     let successCount = 0;
     for (const order of pendingImports) {
         const recordId = `${webshopDate}_${order.department}`;
@@ -253,13 +247,12 @@ async function commitImport() {
     showToast(`${successCount} bestellingen opgeslagen!`, "success");
     pendingImports = [];
     
-    // Terug naar normaal
     document.getElementById('csv-preview-container').classList.add('hidden');
     document.getElementById('webshop-content').classList.remove('hidden');
     renderWebshop('order');
 }
 
-// --- MODAL LOGIC (AANGEPAST VOOR PREVIEW & DB) ---
+// --- MODAL LOGIC ---
 function openEditModal(id) { 
     const modal = document.getElementById('edit-modal');
     const form = document.getElementById('edit-form');
@@ -270,39 +263,32 @@ function openEditModal(id) {
     idInput.value = id;
     deptSelect.innerHTML = AFDELINGEN_CONFIG.map(a => `<option value="${a.naam}">${a.naam}</option>`).join('');
 
-    // SCENARIO 1: NIEUW ITEM IN PREVIEW
     if (id === 'preview-new') {
         deptSelect.disabled = false;
         ['edit-white', 'edit-brown', 'edit-choco', 'edit-jam'].forEach(i => document.getElementById(i).value = 0);
-    
-    // SCENARIO 2: BESTAAND ITEM IN PREVIEW
     } else if (id.startsWith('preview-')) {
         const index = parseInt(id.split('-')[1]);
         const order = pendingImports[index];
         if (order) {
             deptSelect.value = order.department;
-            deptSelect.disabled = false; // In preview mag je afdeling nog wijzigen
+            deptSelect.disabled = false; 
             const i = order.items;
             document.getElementById('edit-white').value = i.whiteBread;
             document.getElementById('edit-brown').value = i.brownBread;
             document.getElementById('edit-choco').value = i.choco;
             document.getElementById('edit-jam').value = i.jam;
         }
-
-    // SCENARIO 3: BESTAAND ITEM IN DATABASE
     } else if (id !== 'new') {
         const order = webshopOrders.find(o => o.id == id);
         if (order) {
             deptSelect.value = order.department;
-            deptSelect.disabled = true; // In DB mag je ID (afdeling) niet meer wijzigen
+            deptSelect.disabled = true; 
             const i = order.items || {};
             document.getElementById('edit-white').value = i.whiteBread || 0;
             document.getElementById('edit-brown').value = i.brownBread || 0;
             document.getElementById('edit-choco').value = i.choco || 0;
             document.getElementById('edit-jam').value = i.jam || 0;
         }
-
-    // SCENARIO 4: NIEUW ITEM IN DATABASE (via manueel knop hoofdscherm)
     } else {
         deptSelect.disabled = false;
         ['edit-white', 'edit-brown', 'edit-choco', 'edit-jam'].forEach(i => document.getElementById(i).value = 0);
@@ -325,7 +311,6 @@ async function saveEditedOrder(event) {
 
     if (Object.values(items).some(v => v < 0)) { showToast("Aantallen mogen niet negatief zijn.", "error"); return; }
     
-    // LOGICA 1: PREVIEW OPSLAAN (Lokaal)
     if (id === 'preview-new') {
         pendingImports.push({ department: dept, items: items });
         showToast("Toegevoegd aan import", "success");
@@ -342,7 +327,6 @@ async function saveEditedOrder(event) {
         return;
     }
 
-    // LOGICA 2: DATABASE OPSLAAN (Direct)
     const btn = event.target.querySelector('button[type="submit"]');
     const originalText = btn.innerHTML;
     btn.disabled = true; btn.innerText = "Opslaan...";
@@ -362,7 +346,6 @@ async function saveEditedOrder(event) {
     }
 }
 
-// ... Rest van de functies (deleteOrder, renderPrepView, etc.) blijven ongewijzigd ...
 async function deleteOrder(dept, date) { 
     if(confirm(`Bestelling van ${dept} verwijderen?`)) { 
         const idToDelete = `${date}_${dept}`;
@@ -498,26 +481,86 @@ async function renderCostsView(container) {
     if(document.getElementById('sync-btn')) document.getElementById('sync-btn').onclick = () => syncCostsToFinances(grouped, descriptionKey);
 }
 
+// -----------------------------------------------------------------------------
+// VERBETERDE SYNC FUNCTIE: Werkt nu voor ALLE afdelingen
+// -----------------------------------------------------------------------------
 async function syncCostsToFinances(groupedData, description) {
-    if(!await askConfirmation("Syncen?", `Wil je de kosten van ${Object.keys(groupedData).length} afdelingen verrekenen?`)) return;
+    if(!await askConfirmation("Syncen?", `Wil je de kosten van deze maand verrekenen in de virtuele rekeningen?`)) return;
+    
     const btn = document.getElementById('sync-btn');
     const originalText = btn.innerHTML;
-    btn.disabled = true; btn.innerHTML = `<div class="loader w-4 h-4 border-white mr-2"></div> Bezig...`;
-    let stats = { inserted: 0, updated: 0, skipped: 0 };
+    btn.disabled = true; 
+    btn.innerHTML = `<div class="loader w-4 h-4 border-white mr-2"></div> Bezig...`;
+    
+    let stats = { inserted: 0, updated: 0, deleted: 0, skipped: 0 };
+    
     try {
-        for (const [dept, data] of Object.entries(groupedData)) {
-            const { data: existing } = await supabaseClient.from(COLLECTION_NAMES.FINANCES).select('*').eq('description', description).eq('afdeling', dept).eq('type', 'expense').maybeSingle();
-            if (data.total <= 0.01) { stats.skipped++; continue; }
-            const payload = { description: description, amount: data.total, type: 'expense', category: 'Webshop', afdeling: dept, afdelingen: [dept], datum: new Date().toISOString().split('T')[0], user: currentUser.name };
-            if (existing) {
-                if (Math.abs(existing.amount - data.total) > 0.01) { await supabaseClient.from(COLLECTION_NAMES.FINANCES).update({ amount: data.total, user: currentUser.name }).eq('id', existing.id); stats.updated++; } 
-                else { stats.skipped++; }
-            } else { await supabaseClient.from(COLLECTION_NAMES.FINANCES).insert(payload); stats.inserted++; }
+        // MAAK EEN LIJST VAN ALLE AFDELINGEN (Config + Alles wat in de orders zit)
+        // Dit zorgt dat ook "niet-standaard" groepen (zoals 'Leiding' of 'Ouders') worden meegenomen.
+        const allDepts = new Set([
+            ...AFDELINGEN_CONFIG.map(a => a.naam), 
+            ...Object.keys(groupedData)
+        ]);
+
+        for (const dept of allDepts) {
+            // Haal het totaal op uit de berekende groupedData, of 0 als er niks is
+            const deptTotal = groupedData[dept] ? groupedData[dept].total : 0;
+
+            // Zoek of er al een financiële post bestaat voor deze maand + deze afdeling
+            const { data: existing } = await supabaseClient
+                .from(COLLECTION_NAMES.FINANCES)
+                .select('*')
+                .eq('description', description)
+                .eq('afdeling', dept)
+                .eq('category', 'Webshop')
+                .maybeSingle();
+
+            // SCENARIO A: Er is een kost (> 0.01 voor afronding)
+            if (deptTotal > 0.01) {
+                const payload = { 
+                    description: description, 
+                    amount: deptTotal, 
+                    type: 'expense', // Het is een uitgave
+                    category: 'Webshop', 
+                    afdeling: dept, 
+                    afdelingen: [dept], // Array format voor compatibiliteit met Financiën
+                    datum: new Date().toISOString().split('T')[0], // Datum van sync
+                    user: currentUser.name 
+                };
+
+                if (existing) {
+                    if (Math.abs(existing.amount - deptTotal) > 0.01) { 
+                        await supabaseClient.from(COLLECTION_NAMES.FINANCES).update({ amount: deptTotal, user: currentUser.name }).eq('id', existing.id); 
+                        stats.updated++; 
+                    } else { 
+                        stats.skipped++; 
+                    }
+                } else { 
+                    await supabaseClient.from(COLLECTION_NAMES.FINANCES).insert(payload); 
+                    stats.inserted++; 
+                }
+            } 
+            // SCENARIO B: Totaal is 0, maar er bestaat wel een record -> VERWIJDEREN
+            // Dit gebeurt als je bestellingen verwijdert, zo blijft de boekhouding proper.
+            else if (existing) {
+                await supabaseClient.from(COLLECTION_NAMES.FINANCES).delete().eq('id', existing.id);
+                stats.deleted++;
+            }
         }
-        showToast(`Sync klaar: ${stats.inserted} nieuw, ${stats.updated} geüpdatet.`, "success");
-        renderWebshop('costs');
-    } catch (err) { console.error(err); showToast("Fout bij sync.", "error"); } 
-    finally { if(btn) { btn.disabled = false; btn.innerHTML = originalText; lucide.createIcons(); } }
+
+        showToast(`Sync klaar: ${stats.inserted} nieuw, ${stats.updated} aangepast, ${stats.deleted} gewist.`, "success");
+        await renderWebshop('costs');
+
+    } catch (err) { 
+        console.error(err); 
+        showToast("Fout bij sync: " + err.message, "error"); 
+    } finally { 
+        if(btn) { 
+            btn.disabled = false; 
+            btn.innerHTML = originalText; 
+            lucide.createIcons(); 
+        } 
+    }
 }
 
 function normalizeDepartment(rawName) {
