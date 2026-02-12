@@ -2,6 +2,9 @@
 
 // --- CONFIGURATIE ---
 const SUPABASE_URL = 'https://bqplzquqmfxqobfkmwua.supabase.co'; 
+// LET OP: De anon key is publiek toegankelijk in de frontend. 
+// Zorg ervoor dat Row Level Security (RLS) in het Supabase dashboard is ingeschakeld 
+// voor alle tabellen (bread_orders, finances, etc.) om ongeautoriseerde toegang te voorkomen.
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxcGx6cXVxbWZ4cW9iZmttd3VhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyMDM5NjAsImV4cCI6MjA4MDc3OTk2MH0.638_AjXjp_p4E9kDjWkLbUry5gphb1X9Q6Fglp2ZjOI';
 
 // Globals
@@ -86,7 +89,6 @@ async function handleLogout() {
 const TIMEOUT_MS = 60 * 60 * 1000; // 60 minuten
 
 function startInactivityTimer() {
-    // FIX: Zorg dat de timer maar 1 keer per pagina start
     if (timerStarted) return;
     timerStarted = true;
 
@@ -104,21 +106,18 @@ function startInactivityTimer() {
         }
     }, 5000);
 
-    window.addEventListener('mousemove', registerActivity);
-    window.addEventListener('keydown', registerActivity);
-    window.addEventListener('click', registerActivity);
-    window.addEventListener('scroll', registerActivity);
+    ['mousemove', 'keydown', 'click', 'scroll'].forEach(event => {
+        window.addEventListener(event, registerActivity);
+    });
     
     registerActivity();
 }
 
 // ================================================================
-// AUTH CHECK (MET CACHING / PROMISE REUSE)
+// AUTH CHECK (MET PROMISE CACHING)
 // ================================================================
 
 function requireAuth() {
-    // FIX: Als we al bezig zijn met checken, geef dezelfde belofte terug.
-    // Dit voorkomt dat we 2x tegelijk Supabase aanroepen (race conditions).
     if (authPromise) return authPromise;
 
     authPromise = (async () => {
@@ -135,25 +134,15 @@ function requireAuth() {
             .from(COLLECTION_NAMES.PORTAL_USERS)
             .select('*')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
 
         if (userRole) {
             currentUser = { ...userRole, email: session.user.email };
-            
             if (typeof updateUserDisplay === 'function') updateUserDisplay(); 
-
             startInactivityTimer();
-
             return currentUser;
         } else {
-            // Als de gebruiker wél een sessie heeft, maar niet in de tabel portal_users staat:
-            console.warn("Gebruiker gevonden in Auth, maar geen rol in database.");
-            
-            // OPTIONEEL: Zet dit aan als je zeker weet dat de DB werkt. 
-            // Uitgeschakeld om 'infinite logout loops' bij slechte verbinding te voorkomen.
-            // await supabaseClient.auth.signOut();
-            // window.location.href = 'index.html';
-            
+            console.warn("Gebruiker heeft sessie, maar geen record in portal_users.");
             return null;
         }
     })();
@@ -162,51 +151,43 @@ function requireAuth() {
 }
 
 // ================================================================
-// GLOBAL MODAL HELPER
+// GLOBAL MODAL HELPER (Met opschoning van event listeners)
 // ================================================================
 
 window.askConfirmation = (title, message) => {
     return new Promise((resolve) => {
-        let modal = document.getElementById('global-confirmation-modal');
+        const modal = document.getElementById('global-confirmation-modal');
         
-        // Fallback als layout nog niet geladen is (zou niet mogen gebeuren in normale flow)
         if (!modal) {
-            if(confirm(`${title}\n\n${message}`)) resolve(true);
-            else resolve(false);
+            resolve(confirm(`${title}\n\n${message}`));
             return;
         }
         
-        // Teksten instellen
         const titleEl = document.getElementById('g-confirm-title');
         const msgEl = document.getElementById('g-confirm-message');
-        if(titleEl) titleEl.innerText = title;
-        if(msgEl) msgEl.innerText = message;
-        
-        // Knoppen events koppelen
         const btnYes = document.getElementById('g-confirm-yes');
         const btnNo = document.getElementById('g-confirm-no');
         
+        if(titleEl) titleEl.innerText = title;
+        if(msgEl) msgEl.innerText = message;
+        
         if(btnYes && btnNo) {
-            // Oude events verwijderen door clone (cleanste manier zonder removeEventListener refs)
+            // Maak clones om gestapelde event listeners te voorkomen
             const newYes = btnYes.cloneNode(true);
             const newNo = btnNo.cloneNode(true);
-            btnYes.parentNode.replaceChild(newYes, btnYes);
-            btnNo.parentNode.replaceChild(newNo, btnNo);
+            btnYes.replaceWith(newYes);
+            btnNo.replaceWith(newNo);
 
-            const closeModal = (result) => {
+            const close = (res) => {
                 modal.classList.add('hidden');
-                resolve(result);
+                resolve(res);
             };
             
-            newYes.onclick = () => closeModal(true);
-            newNo.onclick = () => closeModal(false);
+            newYes.onclick = () => close(true);
+            newNo.onclick = () => close(false);
+            modal.classList.remove('hidden');
         } else {
-            // Fallback als knoppen niet gevonden worden
-             if(confirm(`${title}\n\n${message}`)) resolve(true);
-             else resolve(false);
-             return;
+             resolve(confirm(`${title}\n\n${message}`));
         }
-        
-        modal.classList.remove('hidden');
     });
 };

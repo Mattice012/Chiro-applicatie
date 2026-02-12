@@ -1,19 +1,35 @@
+// js/aanwezigheden.js
+
 let counts = {};
 let notes = {};
 
 window.onload = async () => {
-    renderLayout();
-    const user = await requireAuth();
+    renderLayout(); // Ingebouwd in layout.js
+    const user = await requireAuth(); // Beveiliging checken
     if(user) renderOverview();
 };
 
+/**
+ * Toont de geschiedenis van alle aanwezigheden, gegroepeerd per maand.
+ */
 async function renderOverview() {
     const container = document.getElementById('attendance-content');
     container.innerHTML = '<div class="flex justify-center p-10"><div class="loader"></div></div>';
 
-    const { data, error } = await supabaseClient.from(COLLECTION_NAMES.AANWEZIGHEDEN).select('*').order('datum', { ascending: false });
-    if (error) { showToast("Fout bij laden", "error"); return; }
-    if (!data || data.length === 0) { container.innerHTML = '<div class="text-center text-gray-500">Geen historiek.</div>'; return; }
+    const { data, error } = await supabaseClient
+        .from(COLLECTION_NAMES.AANWEZIGHEDEN)
+        .select('*')
+        .order('datum', { ascending: false });
+
+    if (error) { 
+        showToast("Fout bij laden", "error"); 
+        return; 
+    }
+    
+    if (!data || data.length === 0) { 
+        container.innerHTML = '<div class="text-center text-gray-500">Geen historiek gevonden.</div>'; 
+        return; 
+    }
 
     const grouped = {};
     data.forEach(item => {
@@ -53,7 +69,7 @@ async function renderOverview() {
                                 </div>
                             </div>
                             <div class="p-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-                                ${item.afdelingen.filter(a=>a.aantal > 0).map(a => `<div class="bg-[#1f2330] p-2 rounded text-xs text-gray-300 flex justify-between"><span>${a.naam}</span><span class="font-bold text-white">${a.aantal}</span></div>`).join('')}
+                                ${item.afdelingen.filter(a => a.aantal > 0).map(a => `<div class="bg-[#1f2330] p-2 rounded text-xs text-gray-300 flex justify-between"><span>${a.naam}</span><span class="font-bold text-white">${a.aantal}</span></div>`).join('')}
                             </div>
                         </div>`;
                     }).join('')}
@@ -66,6 +82,9 @@ async function renderOverview() {
     lucide.createIcons();
 }
 
+/**
+ * Rendert de invoer-interface voor een nieuwe of bestaande telling.
+ */
 function renderInput() {
     AFDELINGEN_CONFIG.forEach(a => { counts[a.naam] = 0; notes[a.naam] = ""; });
     const nextSunday = getNextSunday();
@@ -100,10 +119,13 @@ function renderInput() {
     </div>`;
     
     container.innerHTML = html;
-    loadAttendanceDate(nextSunday);
+    loadAttendanceDate(nextSunday, false); // Stille load bij initialisatie
     lucide.createIcons();
 }
 
+/**
+ * Past de teller voor een specifieke afdeling aan.
+ */
 function updateCount(naam, delta) {
     counts[naam] = Math.max(0, (counts[naam] || 0) + delta);
     let total = 0;
@@ -118,11 +140,23 @@ function updateCount(naam, delta) {
     if(totalDisplay) totalDisplay.innerText = total;
 }
 
-async function loadAttendanceDate(date) {
-    const { data } = await supabaseClient.from(COLLECTION_NAMES.AANWEZIGHEDEN).select('*').eq('datum', date).single();
+/**
+ * Laadt bestaande data voor een geselecteerde datum.
+ * @param {string} date - De geselecteerde datum.
+ * @param {boolean} showFeedback - Of er een toast getoond moet worden (default: true).
+ */
+async function loadAttendanceDate(date, showFeedback = true) {
+    const { data } = await supabaseClient.from(COLLECTION_NAMES.AANWEZIGHEDEN).select('*').eq('datum', date).maybeSingle();
+    
+    // Reset alles eerst
     AFDELINGEN_CONFIG.forEach(a => { counts[a.naam] = 0; });
     const noteEl = document.getElementById('general-note');
     if(noteEl) noteEl.value = "";
+    
+    AFDELINGEN_CONFIG.forEach(a => {
+        const el = document.getElementById(`note-${a.naam.replace(/\s/g, '')}`);
+        if(el) el.value = "";
+    });
     
     if (data) {
         if(noteEl) noteEl.value = data.algemeneMededeling || "";
@@ -133,52 +167,69 @@ async function loadAttendanceDate(date) {
                 if(el) el.value = item.opmerking || "";
             });
         }
-        showToast("Gegevens geladen ✔️", "info");
+        // Feedback verbetering: Alleen tonen als showFeedback true is
+        if(showFeedback) showToast(`Bestaande gegevens van ${new Date(date).toLocaleDateString('nl-BE')} geladen ✔️`, "info");
     }
-    updateCount('Sloebers', 0); // Trigger UI update
+    
+    updateCount(AFDELINGEN_CONFIG[0].naam, 0); // Trigger UI update voor de eerste afdeling
 }
 
+/**
+ * Slaat de huidige telling op in de database.
+ */
 async function saveAttendance() {
     const date = document.getElementById('att-date').value;
     const generalNote = document.getElementById('general-note').value;
-    const total = parseInt(document.getElementById('total-count-display').innerText);
+    const totalDisplay = document.getElementById('total-count-display');
+    const total = totalDisplay ? parseInt(totalDisplay.innerText) : 0;
+    
     const afdelingenData = AFDELINGEN_CONFIG.map(afd => {
         const safeName = afd.naam.replace(/\s/g, '');
         const el = document.getElementById(`note-${safeName}`);
-        return { naam: afd.naam, aantal: counts[afd.naam], opmerking: el ? el.value : "" };
+        return { 
+            naam: afd.naam, 
+            aantal: counts[afd.naam] || 0, 
+            opmerking: el ? el.value : "" 
+        };
     });
 
     const { error } = await supabaseClient.from(COLLECTION_NAMES.AANWEZIGHEDEN).upsert({
-        datum: date, timestamp: new Date().toISOString(), algemeneMededeling: generalNote, totaalAantal: total, afdelingen: afdelingenData
+        datum: date, 
+        timestamp: new Date().toISOString(), 
+        algemeneMededeling: generalNote, 
+        totaalAantal: total, 
+        afdelingen: afdelingenData
     }, { onConflict: 'datum' });
 
-    if (error) showToast("Fout bij opslaan", "error");
-    else { showToast("Telling opgeslagen!", "success"); renderOverview(); }
+    if (error) {
+        showToast("Fout bij opslaan: " + error.message, "error");
+    } else { 
+        showToast("Telling opgeslagen!", "success"); 
+        renderOverview(); 
+    }
 }
 
-// async function deleteAttendance(date) {
-//     if(confirm("Zeker weten?")) {
-//         const { error } = await supabaseClient.from(COLLECTION_NAMES.AANWEZIGHEDEN).delete().eq('datum', date);
-//         if(!error) { showToast("Verwijderd", "success"); renderOverview(); }
-//     }
-// }
-
-// Zoek de functie deleteAttendance en vervang deze:
-
+/**
+ * Verwijdert een telling na bevestiging.
+ */
 async function deleteAttendance(date) {
-    // Gebruik de nieuwe mooie modal via window.askConfirmation
+    // Gebruik de robuuste globale confirmation modal uit layout.js
     const confirmed = await window.askConfirmation(
         "Telling verwijderen", 
         `Ben je zeker dat je de telling van ${new Date(date).toLocaleDateString('nl-BE')} wilt wissen?`
     );
 
     if(confirmed) {
-        const { error } = await supabaseClient.from(COLLECTION_NAMES.AANWEZIGHEDEN).delete().eq('datum', date);
+        const { error } = await supabaseClient
+            .from(COLLECTION_NAMES.AANWEZIGHEDEN)
+            .delete()
+            .eq('datum', date);
+
         if(!error) { 
             showToast("Verwijderd", "success"); 
             renderOverview(); 
         } else {
-            showToast("Kon niet verwijderen", "error");
+            showToast("Kon niet verwijderen: " + error.message, "error");
         }
     }
 }
