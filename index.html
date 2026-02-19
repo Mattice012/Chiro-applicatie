@@ -1,27 +1,38 @@
 <!DOCTYPE html>
 <html lang="nl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Chiro Portaal</title>
     <link rel="icon" type="image/png" href="Chirologo_1200px.png" />
+    <link rel="icon" type="image/png" href="Chirologo_1200px.png" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body class="bg-[#0f111a] text-white overflow-hidden">
-    <div id="toast-container" class="fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-6 sm:right-6 sm:w-auto z-[100] flex flex-col gap-3 pointer-events-none"></div>
+    <div id="toast-container"
+        class="fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-6 sm:right-6 sm:w-auto z-[100] flex flex-col gap-3 pointer-events-none">
+    </div>
 
     <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
         <div class="absolute inset-0 bg-[#0f111a] z-0"></div>
-        <div class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse-slow"></div>
-        <div class="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[120px] animate-pulse-slow" style="animation-delay: 1.5s;"></div>
+        <div
+            class="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] animate-pulse-slow">
+        </div>
+        <div class="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600/20 rounded-full blur-[120px] animate-pulse-slow"
+            style="animation-delay: 1.5s;"></div>
 
-        <div class="w-full max-w-md bg-[#181b25]/80 backdrop-blur-xl border border-gray-800 rounded-3xl p-8 shadow-2xl relative z-10">
+        <div
+            class="w-full max-w-md bg-[#181b25]/80 backdrop-blur-xl border border-gray-800 rounded-3xl p-8 shadow-2xl relative z-10">
             <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/20">
+                <div
+                    class="w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/20">
                     <span class="font-bold text-3xl text-white">C</span>
                 </div>
                 <h1 class="text-2xl font-bold text-white tracking-tight">Chiro Portaal</h1>
@@ -31,17 +42,24 @@
             <form id="login-form" class="space-y-4">
                 <div class="relative group">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i data-lucide="mail" class="h-5 w-5 text-gray-500 group-focus-within:text-indigo-400 transition-colors"></i>
+                        <i data-lucide="mail"
+                            class="h-5 w-5 text-gray-500 group-focus-within:text-indigo-400 transition-colors"></i>
                     </div>
-                    <input id="email" type="email" required class="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-xl leading-5 bg-[#0f111a] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:text-sm transition-all" placeholder="E-mailadres">
+                    <input id="email" type="email" required
+                        class="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-xl leading-5 bg-[#0f111a] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:text-sm transition-all"
+                        placeholder="E-mailadres">
                 </div>
                 <div class="relative group">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i data-lucide="lock" class="h-5 w-5 text-gray-500 group-focus-within:text-indigo-400 transition-colors"></i>
+                        <i data-lucide="lock"
+                            class="h-5 w-5 text-gray-500 group-focus-within:text-indigo-400 transition-colors"></i>
                     </div>
-                    <input id="password" type="password" required class="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-xl leading-5 bg-[#0f111a] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:text-sm transition-all" placeholder="Wachtwoord">
+                    <input id="password" type="password" required
+                        class="block w-full pl-10 pr-3 py-3 border border-gray-700 rounded-xl leading-5 bg-[#0f111a] text-gray-300 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 sm:text-sm transition-all"
+                        placeholder="Wachtwoord">
                 </div>
-                <button type="submit" id="login-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25 active:scale-95 flex items-center justify-center mt-6">
+                <button type="submit" id="login-btn"
+                    class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg hover:shadow-indigo-500/25 active:scale-95 flex items-center justify-center mt-6">
                     <span id="login-btn-text">Aanmelden</span>
                     <div id="login-loader" class="loader hidden"></div>
                 </button>
@@ -51,4 +69,5 @@
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
 </body>
+
 </html>
