@@ -12,6 +12,19 @@ let filterState = {
   department: "all",
 };
 
+// Categorie Icoontjes voor naadloze integratie met de rest van de app
+const CATEGORY_ICONS = {
+  Materiaal: "package",
+  Eten: "utensils",
+  Drank: "coffee",
+  Activiteit: "ticket",
+  Verhuur: "key",
+  Lidgeld: "users",
+  Kamp: "tent",
+  Webshop: "shopping-cart",
+  Overige: "tag",
+};
+
 // --- FORMATTERS ---
 const moneyFormatter = new Intl.NumberFormat("nl-BE", {
   style: "currency",
@@ -19,16 +32,10 @@ const moneyFormatter = new Intl.NumberFormat("nl-BE", {
   minimumFractionDigits: 2,
 });
 
-const dateFormatter = new Intl.DateTimeFormat("nl-BE", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-
 // --- INITIALISATIE ---
 window.onload = async () => {
   try {
-    if (typeof renderLayout === "function") renderLayout();
+    if (typeof renderLayout === "function") await renderLayout();
     const user = await requireAuth();
     if (!user) return;
 
@@ -61,29 +68,27 @@ function renderNoAccess() {
 
 // --- DATA LAYER ---
 async function loadData() {
+  // BELANGRIJK: ".order('created_at')" IS VERWIJDERD OMDAT DIT DE CRASH VEROORZAAKTE!
   const { data, error } = await supabaseClient
     .from(COLLECTION_NAMES.FINANCES)
     .select("*")
-    .order("datum", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("datum", { ascending: false });
 
   if (error) {
-    console.error(error);
+    console.error("Database error bij laden financiën:", error);
     showToast("Kon data niet laden.", "error");
   } else {
     cachedFinances = data || [];
 
-    // Verzamel beschikbare maanden voor de filters
     availableMonths.clear();
     cachedFinances.forEach((t) => {
-      availableMonths.add(t.datum.substring(0, 7)); // YYYY-MM
+      if (t.datum) availableMonths.add(t.datum.substring(0, 7)); // YYYY-MM
     });
   }
 }
 
 function initFilters() {
-  // Stel standaard in op huidige maand als er data is, anders 'all'
-  // filterState.month = new Date().toISOString().substring(0, 7);
+  // Start met "Alle Periodes" standaard geselecteerd
 }
 
 // --- VIEW CONTROLLER ---
@@ -115,10 +120,7 @@ function renderView() {
 
   lucide.createIcons();
 
-  // Herstel filterwaarden in de UI
-  if (activeTab === "overview") {
-    restoreFilterUI();
-  }
+  if (activeTab === "overview") restoreFilterUI();
 }
 
 // =============================================================================
@@ -126,7 +128,6 @@ function renderView() {
 // =============================================================================
 function getFilteredData() {
   return cachedFinances.filter((t) => {
-    // 1. Zoekterm
     const search = filterState.search.toLowerCase();
     const matchesSearch =
       !search ||
@@ -135,14 +136,12 @@ function getFilteredData() {
       (t.user || "").toLowerCase().includes(search) ||
       t.amount.toString().includes(search);
 
-    // 2. Datum Filter (Maand)
-    const tMonth = t.datum.substring(0, 7);
+    const tMonth = t.datum ? t.datum.substring(0, 7) : "";
     const matchesMonth =
       filterState.month === "all" || tMonth === filterState.month;
 
-    // 3. Afdeling Filter
     let tDepts = t.afdelingen || (t.afdeling ? [t.afdeling] : ["Algemeen"]);
-    if (typeof tDepts === "string") tDepts = [tDepts]; // Fail-safe
+    if (typeof tDepts === "string") tDepts = [tDepts];
     const matchesDept =
       filterState.department === "all" ||
       tDepts.includes(filterState.department);
@@ -154,16 +153,15 @@ function getFilteredData() {
 function renderOverviewHtml() {
   const data = getFilteredData();
 
-  // Bereken totalen op basis van FILTER
+  // BEREKENINGEN: Zorg dat alles getallen zijn
   const income = data
     .filter((t) => t.type === "income")
-    .reduce((s, t) => s + Number(t.amount), 0);
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
   const expense = data
     .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + Number(t.amount), 0);
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
   const balance = income - expense;
 
-  // Filter Opties Genereren
   const sortedMonths = Array.from(availableMonths).sort().reverse();
   const monthOptions = sortedMonths
     .map((m) => {
@@ -189,7 +187,7 @@ function renderOverviewHtml() {
             <div class="flex items-center gap-2 w-full md:w-auto">
                 <div class="relative w-full md:w-64 group">
                     <i data-lucide="search" class="absolute left-3 top-3 w-4 h-4 text-gray-500 group-focus-within:text-indigo-400 transition-colors"></i>
-                    <input type="text" id="filter-search" oninput="updateFilter('search', this.value)" placeholder="Zoek op omschrijving..." 
+                    <input type="text" id="filter-search" oninput="window.updateFilter('search', this.value)" placeholder="Zoek op omschrijving..." 
                         class="w-full bg-[#0f111a] border border-gray-700 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:border-indigo-500 outline-none transition-all">
                 </div>
             </div>
@@ -197,7 +195,7 @@ function renderOverviewHtml() {
             <div class="flex gap-3 w-full md:w-auto overflow-x-auto">
                 <div class="relative min-w-[140px]">
                     <i data-lucide="calendar" class="absolute left-3 top-3 w-4 h-4 text-gray-500 z-10"></i>
-                    <select id="filter-month" onchange="updateFilter('month', this.value)" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl py-2.5 pl-10 pr-8 text-sm text-white focus:border-indigo-500 outline-none appearance-none cursor-pointer">
+                    <select id="filter-month" onchange="window.updateFilter('month', this.value)" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl py-2.5 pl-10 pr-8 text-sm text-white focus:border-indigo-500 outline-none appearance-none cursor-pointer">
                         <option value="all">Alle Periodes</option>
                         ${monthOptions}
                     </select>
@@ -206,14 +204,14 @@ function renderOverviewHtml() {
 
                 <div class="relative min-w-[140px]">
                     <i data-lucide="users" class="absolute left-3 top-3 w-4 h-4 text-gray-500 z-10"></i>
-                    <select id="filter-dept" onchange="updateFilter('department', this.value)" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl py-2.5 pl-10 pr-8 text-sm text-white focus:border-indigo-500 outline-none appearance-none cursor-pointer">
+                    <select id="filter-dept" onchange="window.updateFilter('department', this.value)" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl py-2.5 pl-10 pr-8 text-sm text-white focus:border-indigo-500 outline-none appearance-none cursor-pointer">
                         <option value="all">Alle Afdelingen</option>
                         ${deptOptions}
                     </select>
                     <i data-lucide="chevron-down" class="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none"></i>
                 </div>
 
-                <button onclick="exportFinances()" class="px-4 py-2.5 bg-[#0f111a] border border-gray-700 hover:bg-[#1f2330] hover:text-white text-gray-400 rounded-xl transition-all flex items-center justify-center" title="Exporteer Selectie">
+                <button onclick="window.exportFinances()" class="px-4 py-2.5 bg-[#0f111a] border border-gray-700 hover:bg-[#1f2330] hover:text-white text-gray-400 rounded-xl transition-all flex items-center justify-center" title="Exporteer Selectie">
                     <i data-lucide="download" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -262,11 +260,10 @@ function renderTransactionList(data) {
   if (data.length === 0)
     return `<div class="flex flex-col items-center justify-center h-64 opacity-50"><i data-lucide="search-x" class="w-12 h-12 text-gray-600 mb-3"></i><p class="text-gray-400">Geen transacties gevonden.</p></div>`;
 
-  // Groepeer per maand indien 'Alle Periodes' geselecteerd is
   if (filterState.month === "all") {
     const groups = {};
     data.forEach((t) => {
-      const mKey = t.datum.substring(0, 7);
+      const mKey = t.datum ? t.datum.substring(0, 7) : "Onbekend";
       if (!groups[mKey]) groups[mKey] = [];
       groups[mKey].push(t);
     });
@@ -275,11 +272,14 @@ function renderTransactionList(data) {
       .sort()
       .reverse()
       .map((mKey) => {
-        const [y, m] = mKey.split("-");
-        const label = new Date(y, m - 1).toLocaleDateString("nl-BE", {
-          month: "long",
-          year: "numeric",
-        });
+        let label = "Onbekende Datum";
+        if (mKey !== "Onbekend") {
+          const [y, m] = mKey.split("-");
+          label = new Date(y, m - 1).toLocaleDateString("nl-BE", {
+            month: "long",
+            year: "numeric",
+          });
+        }
         return `
             <div>
                 <div class="bg-[#1f2330] px-6 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider sticky top-0 z-10 border-y border-gray-800">${label}</div>
@@ -304,39 +304,55 @@ function renderTransactionRow(t) {
     .join(" ");
   const canDelete = ["ADMIN", "KASSIER"].includes(currentUser.role);
 
+  // SLIMME HERKENNING VAN WEBSHOP BESTELLINGEN
+  const catIcon = CATEGORY_ICONS[t.category] || "tag";
+  const isAutoSync =
+    t.user === "Systeem (Auto-Sync)" || t.category === "Webshop";
+
+  // Valideren van datum weergave
+  let day = "??";
+  let weekDay = "???";
+  if (t.datum) {
+    const d = new Date(t.datum);
+    day = d.getDate();
+    weekDay = d.toLocaleDateString("nl-BE", { weekday: "short" });
+  }
+
   return `
-    <div class="group flex items-center justify-between px-6 py-4 hover:bg-[#1f2330] transition-colors">
+    <div class="group flex items-center justify-between px-6 py-4 hover:bg-[#1f2330] transition-colors ${isAutoSync ? "border-l-2 border-indigo-500 bg-indigo-500/5" : ""}">
         <div class="flex items-center gap-4 overflow-hidden">
             <div class="min-w-[50px] text-center">
-                <div class="text-sm font-bold text-white">${new Date(t.datum).getDate()}</div>
-                <div class="text-[10px] text-gray-500 uppercase">${new Date(t.datum).toLocaleDateString("nl-BE", { weekday: "short" })}</div>
+                <div class="text-sm font-bold text-white">${day}</div>
+                <div class="text-[10px] text-gray-500 uppercase">${weekDay}</div>
             </div>
             <div class="flex flex-col truncate">
-                <span class="text-sm font-medium text-white truncate" title="${t.description}">${t.description}</span>
+                <span class="text-sm font-medium text-white truncate flex items-center gap-2" title="${t.description}">
+                    ${t.description}
+                    ${isAutoSync ? `<span class="text-[9px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30 uppercase tracking-wider"><i data-lucide="zap" class="w-3 h-3 inline"></i> Auto</span>` : ""}
+                </span>
                 <div class="flex items-center gap-2 mt-1">
-                    <span class="text-[10px] text-gray-500 uppercase tracking-wider">${t.category || "Overige"}</span>
-                    <div class="flex gap-1">${depts}</div>
+                    <span class="text-[10px] text-gray-400 uppercase tracking-wider flex items-center gap-1"><i data-lucide="${catIcon}" class="w-3 h-3"></i> ${t.category || "Overige"}</span>
+                    <div class="flex gap-1 ml-2">${depts}</div>
                 </div>
             </div>
         </div>
         <div class="flex items-center gap-6 pl-4">
             <div class="text-right">
-                <div class="font-mono font-bold ${amountClass}">${sign} ${moneyFormatter.format(t.amount).replace("€", "").trim()}</div>
-                <div class="text-[10px] text-gray-600">${t.user || "Systeem"}</div>
+                <div class="font-mono font-bold ${amountClass}">${sign} ${moneyFormatter.format(Number(t.amount)).replace("€", "").trim()}</div>
+                <div class="text-[10px] ${isAutoSync ? "text-indigo-400/70 font-bold" : "text-gray-600"}">${t.user || "Systeem"}</div>
             </div>
-            ${canDelete ? `<button onclick="deleteTransaction(${t.id})" class="opacity-0 group-hover:opacity-100 p-2 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : `<div class="w-8"></div>`}
+            ${canDelete ? `<button onclick="window.deleteTransaction(${t.id})" class="opacity-0 group-hover:opacity-100 p-2 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : `<div class="w-8"></div>`}
         </div>
     </div>`;
 }
 
-function updateFilter(key, value) {
+window.updateFilter = (key, value) => {
   filterState[key] = value;
-  // Refresh alleen de content area
   const container = document.getElementById("fin-content");
   container.innerHTML = renderOverviewHtml();
   restoreFilterUI();
   lucide.createIcons();
-}
+};
 
 function restoreFilterUI() {
   const s = document.getElementById("filter-search");
@@ -354,13 +370,25 @@ function restoreFilterUI() {
 // 2. ACTIONS (CRUD)
 // =============================================================================
 window.deleteTransaction = async (id) => {
-  if (
-    !(await askConfirmation(
-      "Verwijderen",
-      "Wil je deze transactie definitief verwijderen?",
-    ))
-  )
-    return;
+  const tx = cachedFinances.find((t) => t.id === id);
+
+  // Waarschuwing als iemand een Webshop-kost probeert te wissen
+  if (tx && (tx.user === "Systeem (Auto-Sync)" || tx.category === "Webshop")) {
+    const waarschuwing =
+      "⚠️ Dit is een automatische webshop-kost.\n\nAls je deze hier verwijdert, zal het systeem hem bij de volgende automatische update van de webshop gewoon terugzetten.\n\nWil je dit bedrag aanpassen? Wijzig dan de bestellingen zelf in het 'Bestellingen' menu.\n\nWil je hem nu toch tijdelijk verwijderen?";
+    if (
+      !(await window.askConfirmation("Automatische Transactie", waarschuwing))
+    )
+      return;
+  } else {
+    if (
+      !(await window.askConfirmation(
+        "Verwijderen",
+        "Wil je deze transactie definitief verwijderen?",
+      ))
+    )
+      return;
+  }
 
   const { error } = await supabaseClient
     .from(COLLECTION_NAMES.FINANCES)
@@ -370,7 +398,7 @@ window.deleteTransaction = async (id) => {
   else {
     showToast("Transactie verwijderd.", "success");
     await loadData();
-    renderView(); // Refresh alles om totalen te updaten
+    renderView();
   }
 };
 
@@ -381,8 +409,12 @@ window.exportFinances = () => {
   let csvContent =
     "Datum;Type;Bedrag;Categorie;Omschrijving;Afdelingen;Gebruiker\n";
   data.forEach((row) => {
-    const d = new Date(row.datum).toLocaleDateString("nl-BE");
-    const amount = row.amount.toString().replace(".", ",");
+    const d = row.datum
+      ? new Date(row.datum).toLocaleDateString("nl-BE")
+      : "Onbekend";
+    const amount = Number(row.amount || 0)
+      .toString()
+      .replace(".", ",");
     const depts = (row.afdelingen || [row.afdeling]).join(", ");
     const desc = `"${(row.description || "").replace(/"/g, '""')}"`;
     csvContent += `${d};${row.type};${amount};${row.category};${desc};${depts};${row.user}\n`;
@@ -391,7 +423,7 @@ window.exportFinances = () => {
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `Chiro_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `Chiro_Financien_${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
 };
 
@@ -404,29 +436,52 @@ window.askConfirmation = (title, msg) => {
 };
 
 // =============================================================================
-// 3. VIRTUELE REKENINGEN (BUDGET VIEW)
+// 3. VIRTUELE REKENINGEN (BUDGET VIEW) - IN/UIT OVERZICHT
 // =============================================================================
 function renderBudgetsView(container) {
-  // Bereken saldo per afdeling (altijd totaal, ongeacht filter)
   const deptBalances = {};
   AFDELINGEN_CONFIG.forEach(
-    (a) => (deptBalances[a.naam] = { balance: 0, count: 0, color: a.kleur }),
+    (a) =>
+      (deptBalances[a.naam] = {
+        balance: 0,
+        income: 0,
+        expense: 0,
+        count: 0,
+        color: a.kleur,
+      }),
   );
-  deptBalances["Algemeen"] = { balance: 0, count: 0, color: "gray" };
+  deptBalances["Algemeen"] = {
+    balance: 0,
+    income: 0,
+    expense: 0,
+    count: 0,
+    color: "gray",
+  };
 
   cachedFinances.forEach((t) => {
-    const amount = t.type === "income" ? t.amount : -t.amount;
+    const amount = Number(t.amount || 0);
     let depts = t.afdelingen || (t.afdeling ? [t.afdeling] : ["Algemeen"]);
     if (!Array.isArray(depts)) depts = [depts];
 
-    // Split kosten over betrokken afdelingen
     const splitAmount = amount / depts.length;
     depts.forEach((d) => {
       if (deptBalances[d]) {
-        deptBalances[d].balance += splitAmount;
+        if (t.type === "income") {
+          deptBalances[d].income += splitAmount;
+          deptBalances[d].balance += splitAmount;
+        } else {
+          deptBalances[d].expense += splitAmount;
+          deptBalances[d].balance -= splitAmount;
+        }
         deptBalances[d].count++;
       } else if (deptBalances["Algemeen"]) {
-        deptBalances["Algemeen"].balance += splitAmount;
+        if (t.type === "income") {
+          deptBalances["Algemeen"].income += splitAmount;
+          deptBalances["Algemeen"].balance += splitAmount;
+        } else {
+          deptBalances["Algemeen"].expense += splitAmount;
+          deptBalances["Algemeen"].balance -= splitAmount;
+        }
         deptBalances["Algemeen"].count++;
       }
     });
@@ -434,27 +489,37 @@ function renderBudgetsView(container) {
 
   const cards = [...AFDELINGEN_CONFIG, { naam: "Algemeen", kleur: "gray" }]
     .map((afd) => {
-      const data = deptBalances[afd.naam] || { balance: 0, count: 0 };
+      const data = deptBalances[afd.naam] || {
+        balance: 0,
+        income: 0,
+        expense: 0,
+        count: 0,
+      };
       const color = afd.kleur || "gray";
       const isPos = data.balance >= 0;
 
       return `
-        <div onclick="openBudgetDetail('${afd.naam}')" class="cursor-pointer group bg-[#181b25] border border-gray-800 p-6 rounded-2xl relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl hover:shadow-${color}-500/10 transition-all duration-300 flex flex-col justify-between">
+        <div onclick="window.openBudgetDetail('${afd.naam}')" class="cursor-pointer group bg-[#181b25] border border-gray-800 p-6 rounded-2xl relative overflow-hidden hover:-translate-y-1 hover:shadow-2xl hover:shadow-${color}-500/10 transition-all duration-300 flex flex-col justify-between">
             <div class="absolute right-0 top-0 w-32 h-32 bg-${color}-500/5 rounded-bl-full group-hover:bg-${color}-500/10 transition-all"></div>
             <div class="relative z-10 flex-1">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-bold text-white text-lg">${afd.naam}</h3>
                     <div class="p-2 rounded-lg bg-${color}-500/10 text-${color}-400"><i data-lucide="piggy-bank" class="w-5 h-5"></i></div>
                 </div>
-                <p class="text-xs font-bold text-gray-500 uppercase mb-1">Beschikbaar</p>
+                <p class="text-xs font-bold text-gray-500 uppercase mb-1">Beschikbaar Saldo</p>
                 <p class="text-3xl font-black ${isPos ? "text-white" : "text-rose-400"} tracking-tight">${moneyFormatter.format(data.balance)}</p>
+                
+                <div class="flex justify-between text-[10px] uppercase font-bold mt-4 p-2.5 bg-black/20 rounded-xl border border-white/5">
+                    <div class="text-emerald-400 flex flex-col"><span>In</span> <span class="text-sm">${moneyFormatter.format(data.income)}</span></div>
+                    <div class="text-rose-400 flex flex-col text-right"><span>Uit</span> <span class="text-sm">${moneyFormatter.format(data.expense)}</span></div>
+                </div>
             </div>
             
             <div class="relative z-10 mt-5 space-y-3">
                 ${
                   afd.naam !== "Algemeen"
                     ? `
-                <button onclick="event.stopPropagation(); openAttendanceIncomeModal('${afd.naam}')" class="w-full py-2.5 bg-[#1f2330] hover:bg-[#2a3040] border border-gray-700 rounded-xl text-gray-300 hover:text-white transition-all flex items-center justify-center gap-2 text-xs font-bold shadow-sm">
+                <button onclick="event.stopPropagation(); window.openAttendanceIncomeModal('${afd.naam}')" class="w-full py-2.5 bg-[#1f2330] hover:bg-[#2a3040] border border-gray-700 rounded-xl text-gray-300 hover:text-white transition-all flex items-center justify-center gap-2 text-xs font-bold shadow-sm">
                     <i data-lucide="coins" class="w-4 h-4 text-${color}-400"></i> Inkomst via Telling
                 </button>
                 `
@@ -473,7 +538,7 @@ function renderBudgetsView(container) {
     <div class="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
         <div class="mb-6 flex items-center gap-4">
             <div class="p-3 bg-indigo-500/20 rounded-xl text-indigo-400"><i data-lucide="layout-grid" class="w-6 h-6"></i></div>
-            <div><h2 class="text-2xl font-bold text-white">Virtuele Rekeningen</h2><p class="text-gray-400 text-sm">Huidige stand van zaken per afdeling.</p></div>
+            <div><h2 class="text-2xl font-bold text-white">Virtuele Rekeningen</h2><p class="text-gray-400 text-sm">Huidige stand van zaken per afdeling, incl. Webshop aankopen.</p></div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">${cards}</div>
     </div>`;
@@ -495,7 +560,7 @@ function renderAddFormHtml() {
                 Nieuwe Transactie
             </h2>
 
-            <form onsubmit="handleTransactionSubmit(event)" class="space-y-8 relative z-10">
+            <form onsubmit="window.handleTransactionSubmit(event)" class="space-y-8 relative z-10">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div class="space-y-3">
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider">Soort Verrichting</label>
@@ -535,7 +600,7 @@ function renderAddFormHtml() {
 
                 <div class="space-y-3">
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider">Categorie</label>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                         ${[
                           "Materiaal",
                           "Eten",
@@ -544,13 +609,14 @@ function renderAddFormHtml() {
                           "Verhuur",
                           "Lidgeld",
                           "Kamp",
+                          "Webshop",
                           "Overige",
                         ]
                           .map(
                             (c) => `
                             <label class="cursor-pointer">
                                 <input type="radio" name="t-cat" value="${c}" class="peer hidden" ${c === "Materiaal" ? "checked" : ""}>
-                                <div class="px-3 py-2.5 rounded-xl border border-gray-700 bg-[#0f111a] text-center text-sm font-medium text-gray-400 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10 peer-checked:text-indigo-400 hover:border-gray-600 transition-all">${c}</div>
+                                <div class="px-2 py-2.5 rounded-xl border border-gray-700 bg-[#0f111a] text-center text-sm font-medium text-gray-400 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10 peer-checked:text-indigo-400 hover:border-gray-600 transition-all">${c}</div>
                             </label>
                         `,
                           )
@@ -593,19 +659,17 @@ window.handleTransactionSubmit = async (e) => {
   btn.innerHTML =
     '<div class="loader w-5 h-5 border-white mr-2"></div> Bezig...';
 
-  // FormData ophalen
   const type = document.querySelector('input[name="t-type"]:checked').value;
   const amount = document.getElementById("t-amount").value;
   const desc = document.getElementById("t-desc").value;
   const date = document.getElementById("t-date").value;
   const cat = document.querySelector('input[name="t-cat"]:checked').value;
 
-  // Checkboxes
   const checkboxes = document.querySelectorAll(
     "#dept-checkboxes input:checked",
   );
   let afdelingen = Array.from(checkboxes).map((cb) => cb.value);
-  if (afdelingen.length === 0) afdelingen = ["Algemeen"]; // Fallback
+  if (afdelingen.length === 0) afdelingen = ["Algemeen"];
 
   const { error } = await supabaseClient
     .from(COLLECTION_NAMES.FINANCES)
@@ -616,7 +680,7 @@ window.handleTransactionSubmit = async (e) => {
       category: cat,
       datum: date,
       afdelingen: afdelingen,
-      afdeling: afdelingen[0], // Primary dept voor legacy support
+      afdeling: afdelingen[0],
       user: currentUser.name || currentUser.email,
     });
 
@@ -635,23 +699,24 @@ window.handleTransactionSubmit = async (e) => {
 
 // --- BUDGET DETAILS MODAL (Pop-up) ---
 window.openBudgetDetail = (deptName) => {
-  // Filter alle transacties voor deze afdeling
   const txs = cachedFinances.filter((t) => {
     const depts = t.afdelingen || [t.afdeling];
     return depts.includes(deptName);
   });
 
-  // Bereken het aandeel van deze afdeling in elk bedrag
   const rows = txs.map((t) => {
     const depts = t.afdelingen || [t.afdeling];
-    const share = t.amount / depts.length; // Verdeel bedrag
+    const share = Number(t.amount || 0) / depts.length;
     return { ...t, share };
   });
 
-  const total = rows.reduce(
-    (sum, t) => sum + (t.type === "income" ? t.share : -t.share),
-    0,
-  );
+  const totalInc = rows
+    .filter((t) => t.type === "income")
+    .reduce((s, t) => s + t.share, 0);
+  const totalExp = rows
+    .filter((t) => t.type === "expense")
+    .reduce((s, t) => s + t.share, 0);
+  const total = totalInc - totalExp;
 
   const modal = document.createElement("div");
   modal.id = "budget-modal";
@@ -659,35 +724,54 @@ window.openBudgetDetail = (deptName) => {
   modal.innerHTML = `
     <div class="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onclick="document.getElementById('budget-modal').remove()"></div>
     <div class="relative w-full max-w-2xl bg-[#181b25] border border-gray-700 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in duration-200">
-        <div class="bg-[#1f2330] p-6 border-b border-gray-800 flex justify-between items-center">
-            <div>
-                <h3 class="text-xl font-bold text-white">${deptName}</h3>
-                <p class="text-sm text-gray-400">Huidig Saldo: <span class="font-bold ${total >= 0 ? "text-emerald-400" : "text-rose-400"}">${moneyFormatter.format(total)}</span></p>
+        <div class="bg-[#1f2330] p-6 border-b border-gray-800 flex justify-between items-start">
+            <div class="w-full pr-4">
+                <h3 class="text-2xl font-bold text-white mb-4">${deptName}</h3>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl text-center">
+                        <div class="text-[10px] text-emerald-500 uppercase font-bold tracking-wider mb-1">Inkomsten</div>
+                        <div class="text-emerald-400 font-black">${moneyFormatter.format(totalInc)}</div>
+                    </div>
+                    <div class="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-center">
+                        <div class="text-[10px] text-rose-500 uppercase font-bold tracking-wider mb-1">Uitgaven</div>
+                        <div class="text-rose-400 font-black">${moneyFormatter.format(totalExp)}</div>
+                    </div>
+                    <div class="bg-indigo-500/10 border border-indigo-500/20 p-2.5 rounded-xl text-center">
+                        <div class="text-[10px] text-indigo-400 uppercase font-bold tracking-wider mb-1">Balans</div>
+                        <div class="text-indigo-400 font-black">${moneyFormatter.format(total)}</div>
+                    </div>
+                </div>
             </div>
             <button onclick="document.getElementById('budget-modal').remove()" class="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors"><i data-lucide="x" class="w-6 h-6"></i></button>
         </div>
         <div class="flex-1 overflow-y-auto custom-scrollbar bg-[#0f111a]">
             <table class="w-full text-left text-sm text-gray-400">
                 <thead class="bg-[#13151c] sticky top-0 z-10 text-xs font-bold uppercase text-gray-500">
-                    <tr><th class="px-6 py-3">Datum</th><th class="px-6 py-3">Omschrijving</th><th class="px-6 py-3 text-right">Aandeel</th></tr>
+                    <tr><th class="px-6 py-3">Datum</th><th class="px-6 py-3">Omschrijving</th><th class="px-6 py-3 text-right">Bedrag</th></tr>
                 </thead>
                 <tbody class="divide-y divide-gray-800/50">
                     ${
                       rows.length
                         ? rows
-                            .map(
-                              (t) => `
+                            .map((t) => {
+                              const dateStr = t.datum
+                                ? new Date(t.datum).toLocaleDateString("nl-BE")
+                                : "??";
+                              return `
                         <tr class="hover:bg-white/5 transition-colors">
-                            <td class="px-6 py-4 font-mono text-xs whitespace-nowrap">${new Date(t.datum).toLocaleDateString("nl-BE")}</td>
+                            <td class="px-6 py-4 font-mono text-xs whitespace-nowrap">${dateStr}</td>
                             <td class="px-6 py-4">
-                                <div class="text-white font-medium">${t.description}</div>
+                                <div class="text-white font-medium flex items-center gap-2">
+                                    ${t.description} 
+                                    ${t.user === "Systeem (Auto-Sync)" || t.category === "Webshop" ? '<span title="Automatische Webshop Kost" class="text-[9px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30 uppercase tracking-wider"><i data-lucide="zap" class="w-3 h-3 inline"></i> Auto</span>' : ""}
+                                </div>
                                 <div class="text-[10px] text-gray-500">${t.category}</div>
                             </td>
                             <td class="px-6 py-4 text-right font-mono font-bold ${t.type === "income" ? "text-emerald-400" : "text-rose-400"}">
                                 ${t.type === "income" ? "+" : "-"} ${moneyFormatter.format(t.share)}
                             </td>
-                        </tr>`,
-                            )
+                        </tr>`;
+                            })
                             .join("")
                         : `<tr><td colspan="3" class="text-center p-12 text-gray-500">Geen transacties</td></tr>`
                     }
@@ -701,10 +785,9 @@ window.openBudgetDetail = (deptName) => {
 };
 
 // =============================================================================
-// 5. LEDEN TELLING INKOMSTEN MODAL (NIEUW)
+// 5. LEDEN TELLING INKOMSTEN MODAL
 // =============================================================================
 window.openAttendanceIncomeModal = async (deptName) => {
-  // Zoek de meest recente datum in de aanwezigheden
   const { data } = await supabaseClient
     .from(COLLECTION_NAMES.AANWEZIGHEDEN)
     .select("datum")
@@ -730,7 +813,7 @@ window.openAttendanceIncomeModal = async (deptName) => {
         <div class="p-6 space-y-5">
             <div>
                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Datum van telling</label>
-                <input type="date" id="att-inc-date" value="${lastDate}" onchange="loadAttendanceForIncome('${deptName}')" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none transition-all">
+                <input type="date" id="att-inc-date" value="${lastDate}" onchange="window.loadAttendanceForIncome('${deptName}')" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none transition-all">
             </div>
             
             <div class="bg-[#0f111a] border border-gray-800 rounded-xl p-4 shadow-inner">
@@ -749,12 +832,12 @@ window.openAttendanceIncomeModal = async (deptName) => {
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Prijs per lid (€)</label>
                     <div class="relative">
                         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">€</span>
-                        <input type="number" id="att-inc-price" value="2" step="0.5" min="0" oninput="calcAttendanceIncome()" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl py-3 pl-8 pr-3 text-white focus:border-indigo-500 outline-none transition-all font-bold">
+                        <input type="number" id="att-inc-price" value="2" step="0.5" min="0" oninput="window.calcAttendanceIncome()" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl py-3 pl-8 pr-3 text-white focus:border-indigo-500 outline-none transition-all font-bold">
                     </div>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Niet betaald (aantal)</label>
-                    <input type="number" id="att-inc-unpaid" value="0" min="0" oninput="calcAttendanceIncome()" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none transition-all font-bold">
+                    <input type="number" id="att-inc-unpaid" value="0" min="0" oninput="window.calcAttendanceIncome()" class="w-full bg-[#0f111a] border border-gray-700 rounded-xl p-3 text-white focus:border-indigo-500 outline-none transition-all font-bold">
                 </div>
             </div>
 
@@ -766,7 +849,7 @@ window.openAttendanceIncomeModal = async (deptName) => {
                 <span id="att-inc-total" class="text-3xl font-black text-white" data-amount="0">€ 0.00</span>
             </div>
 
-            <button onclick="saveAttendanceIncome('${deptName}')" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all flex justify-center items-center gap-2 transform active:scale-[0.99]">
+            <button onclick="window.saveAttendanceIncome('${deptName}')" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-indigo-500/25 transition-all flex justify-center items-center gap-2 transform active:scale-[0.99]">
                 <i data-lucide="plus-circle" class="w-5 h-5"></i> Toevoegen aan Rekening
             </button>
         </div>
@@ -774,7 +857,6 @@ window.openAttendanceIncomeModal = async (deptName) => {
   document.body.appendChild(modal);
   lucide.createIcons();
 
-  // Laad direct de data in van de gekozen (of standaard) datum
   window.loadAttendanceForIncome(deptName);
 };
 
@@ -811,7 +893,6 @@ window.loadAttendanceForIncome = async (deptName) => {
   countEl.innerText = count;
   noteEl.innerText = note;
 
-  // Reset default de 'niet betaald' status als de datum verandert, maar blijf rekenen
   document.getElementById("att-inc-unpaid").value = 0;
   window.calcAttendanceIncome();
 };
@@ -837,12 +918,10 @@ window.saveAttendanceIncome = async (deptName) => {
     parseFloat(document.getElementById("att-inc-total").dataset.amount) || 0;
   const date = document.getElementById("att-inc-date").value;
 
-  if (amount <= 0) {
+  if (amount <= 0)
     return showToast("Bedrag moet groter zijn dan € 0.", "warning");
-  }
 
   const unpaid = parseInt(document.getElementById("att-inc-unpaid").value) || 0;
-  const price = document.getElementById("att-inc-price").value;
   const count = document.getElementById("att-inc-count").dataset.count;
 
   let desc = `Activiteit/Drankje ${new Date(date).toLocaleDateString("nl-BE")}`;
@@ -862,7 +941,7 @@ window.saveAttendanceIncome = async (deptName) => {
       amount: amount,
       description: desc,
       category: "Activiteit",
-      datum: date, // Je kan ook new Date().toISOString().split('T')[0] gebruiken indien het moment van ingave gewenst is
+      datum: date,
       afdelingen: [deptName],
       afdeling: deptName,
       user: currentUser.name || currentUser.email,
@@ -875,8 +954,6 @@ window.saveAttendanceIncome = async (deptName) => {
   } else {
     showToast("Inkomst succesvol toegevoegd aan " + deptName + "!", "success");
     document.getElementById("attendance-income-modal").remove();
-
-    // Refresh live data
     await loadData();
     renderView();
   }
